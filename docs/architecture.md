@@ -1,26 +1,36 @@
-# Architecture and Phase 1 acceptance checklist
+# Architecture and implementation status
 
-LifeOps is a local-first modular monolith. Browser routes and future workers must call the same validated service layer. SQLAlchemy models persist to SQLite by default under `data/lifeops.db`; set `LIFEOPS_DATA_DIR` or `LIFEOPS_DATABASE_URL` to change the location.
+LifeOps is a local-first modular monolith. Browser routes and future workers should call the same validated service layer. SQLAlchemy persists operational records to SQLite by default in `data/lifeops.db`.
 
 ## Trust boundaries
 
-- Browser inputs are untrusted and validated by service functions.
-- SQLite stores operational records and audit events.
-- The model runtime is currently unconfigured. Model output must never authorize tools or mutate policy.
-- The web server binds to loopback by default. Remote binding is blocked unless explicitly opted into; authentication is not yet implemented, so remote exposure is not suitable for production.
-- Research content, imported skills, and documents must be treated as untrusted when those modules are introduced.
+- Browser input is untrusted and must be validated server-side.
+- SQLite stores tasks, notes, projects, memories, approvals, agent-run requests, and audit events.
+- Model inference is not configured in this release. Requests submitted to the run service are persisted as `needs_input`; no fake execution is reported.
+- The deterministic policy engine never accepts model output as authorization. Destructive/system-security actions are hard blocked or approval gated.
+- Research pages, documents, imported skills, and external tool outputs must be treated as untrusted.
+- The web server binds to loopback by default. Authentication and CSRF protection remain release blockers for remote exposure.
 
-## Phase 1 acceptance checklist
+## Current milestone
 
-- [x] Establish package entry point and local SQLite persistence.
-- [x] Implement task creation, listing, completion, and audit records.
-- [x] Implement note creation and listing.
-- [x] Provide responsive browser pages for overview, tasks, notes, diagnostics, and settings status.
-- [x] Provide a machine-readable health endpoint.
-- [x] Add deterministic service tests.
-- [ ] Authentication, CSRF protection, and user/session isolation.
-- [ ] Versioned database migrations and backup/restore verification.
-- [ ] Browser-level end-to-end tests on Windows and Linux.
-- [ ] Model adapter, persistent job queue, policy engine, and approval lifecycle.
+Implemented: task create/list/update/delete/complete services; project creation/listing; note create/list/search/update/delete services; searchable user memory with categories; single-decision approval records; deterministic action policy; persistent agent request records that explicitly report missing model runtime; audit records; local install scripts and CI.
 
-Checked items describe code added in this branch, not tests already executed in a deployment environment. Run `pytest` locally to verify the current checkout.
+Still not implemented: authentication/session isolation, CSRF middleware, Alembic revisions, persistent worker execution, actual model adapters, integrations, full calendar/recurrence, file sandbox, skill sandbox/publishing, isolated self-repair, cryptographic backup encryption, and browser E2E tests.
+
+## Security decisions
+
+The policy engine returns `ALLOW`, `ASK`, or `BLOCK`. Approval records are an audit/decision mechanism only; the application must not execute the underlying action unless a separately implemented executor verifies the policy decision and approved action identity. Remote binding is not safe until authentication and CSRF protections ship.
+
+## Acceptance checklist
+
+- [x] Local SQLite persistence and health route
+- [x] Tasks and notes through browser UI
+- [x] Service validation and audit events
+- [x] Project, memory, approval and agent-run persistence services
+- [x] Deterministic policy decision unit tests
+- [ ] Authentication, sessions, CSRF, and authorization
+- [ ] Alembic migrations and verified restore tests
+- [ ] Real model adapter with capability detection and cancellation
+- [ ] Durable worker queue, step logs, retry and recovery
+- [ ] Skills lifecycle and isolated repair/evaluation workflows
+- [ ] Browser-level tests and Windows/Linux CI verification
