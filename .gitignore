@@ -12,3 +12,15 @@ data/*
 !data/.gitkeep
 workspace/*
 !workspace/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+.envrc
+*.log
+dist/
+build/
+*.egg-info/
+workspace/repair_sandboxes/
+workspace/skills_staging/
+backups/
+secrets/
