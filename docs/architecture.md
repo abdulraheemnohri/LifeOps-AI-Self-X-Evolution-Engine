@@ -27,8 +27,11 @@ The policy engine returns `ALLOW`, `ASK`, or `BLOCK`. Approval records are an au
 - [x] Tasks and notes through browser UI
 - [x] Service validation and audit events
 - [x] Project, memory, approval and agent-run persistence services
+- [x] Self-X goal/evaluation/proposal records with review state
+- [x] SQLite online backup, manifest hash verification, integrity check and non-overwriting restore
 - [x] Deterministic policy decision unit tests
 - [ ] Authentication, sessions, CSRF, and authorization
+- [ ] Browser-level E2E and a successful verified CI run
 - [ ] Alembic migrations and verified restore tests
 - [ ] Real model adapter with capability detection and cancellation
 - [ ] Durable worker queue, step logs, retry and recovery
