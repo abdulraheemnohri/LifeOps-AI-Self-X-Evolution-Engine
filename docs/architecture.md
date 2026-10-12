@@ -1,45 +1,26 @@
-# LifeOps AI + Self-X Evolution Engine Documentation
+# Architecture and Phase 1 acceptance checklist
 
-## System Architecture
+LifeOps is a local-first modular monolith. Browser routes and future workers must call the same validated service layer. SQLAlchemy models persist to SQLite by default under `data/lifeops.db`; set `LIFEOPS_DATA_DIR` or `LIFEOPS_DATABASE_URL` to change the location.
 
-LifeOps AI + Self-X is a local-first, self-hosted personal productivity platform and agent framework.
+## Trust boundaries
 
-### Architecture Subsystems
-1. **Presentation Layer**: FastHTML + HTMX responsive Web UI (Dark theme).
-2. **API & Real-time Layer**: FastAPI REST API and WebSocket events (`/ws/events`).
-3. **Security & Policy**: PolicyEngine (ALLOW, ASK, BLOCK) and ApprovalGate for human-in-the-loop controls.
-4. **Agent Orchestrator**: Planner, Executor, and Tool Registry.
-5. **Self-X Subsystem**: Identity, Diagnostics, Research, Skills Studio, Memory Explorer, and Recovery Manager.
-6. **Storage Layer**: SQLite 3.x using SQLAlchemy 2.x declarative models across 33 relational tables.
+- Browser inputs are untrusted and validated by service functions.
+- SQLite stores operational records and audit events.
+- The model runtime is currently unconfigured. Model output must never authorize tools or mutate policy.
+- The web server binds to loopback by default. Remote binding is blocked unless explicitly opted into; authentication is not yet implemented, so remote exposure is not suitable for production.
+- Research content, imported skills, and documents must be treated as untrusted when those modules are introduced.
 
-## Application Entry Point
+## Phase 1 acceptance checklist
 
-The unified ASGI application lives in `lifeops.main` (`src/lifeops/main.py`).
-It mounts the FastAPI API (including the `/ws/events` WebSocket) inside the
-FastHTML web app, so a single server exposes both the Web UI and the REST API.
+- [x] Establish package entry point and local SQLite persistence.
+- [x] Implement task creation, listing, completion, and audit records.
+- [x] Implement note creation and listing.
+- [x] Provide responsive browser pages for overview, tasks, notes, diagnostics, and settings status.
+- [x] Provide a machine-readable health endpoint.
+- [x] Add deterministic service tests.
+- [ ] Authentication, CSRF protection, and user/session isolation.
+- [ ] Versioned database migrations and backup/restore verification.
+- [ ] Browser-level end-to-end tests on Windows and Linux.
+- [ ] Model adapter, persistent job queue, policy engine, and approval lifecycle.
 
-Start it with either:
-```bash
-python -m lifeops.main                 # development, auto-reload
-uvicorn lifeops.main:app --host 127.0.0.1 --port 8000
-uvicorn lifeops.main:create_app --factory   # factory form (runs DB init/migrations on boot)
-```
-
-## Quickstart & Installation
-
-### Linux
-```bash
-./scripts/install_linux.sh
-./scripts/start_linux.sh
-```
-
-### Windows (PowerShell)
-```powershell
-.\scripts\install_windows.ps1
-.\scripts\start_windows.ps1
-```
-
-### System Doctor / Verification
-```bash
-python3 scripts/doctor.py
-```
+Checked items describe code added in this branch, not tests already executed in a deployment environment. Run `pytest` locally to verify the current checkout.
