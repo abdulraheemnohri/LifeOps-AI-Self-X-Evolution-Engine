@@ -1461,3 +1461,89 @@ The initial release is complete when:
 My recommendation: build the modular monolith first, with a polished Web UI and a reliable task execution engine. Then add Self-X's skill learning and controlled self-improvement. This approach gives you a usable personal assistant early while building toward the larger autonomous system without turning the project into an unmaintainable collection of disconnected features.
 
 14
+
+---
+
+## 20. Repository implementation contract and current execution priorities
+
+This section supplements the product requirements above. Treat the repository as an existing application: inspect its real files, preserve working behavior, and implement the next smallest complete vertical slice rather than generating a disconnected replacement project.
+
+### 20.1 Required engineering workflow
+
+For every implementation pass:
+
+1. Inspect the target branch, repository tree, relevant source files, tests, dependency constraints, and recent commits before editing.
+2. Keep changes focused, typed, documented, and compatible with Python 3.12+ on Windows 10/11 and Linux.
+3. Add or update automated tests with each behavior change. Test validation failures, security boundaries, failure paths, and success paths.
+4. Run the relevant tests and quality checks when an execution environment is available. If they cannot be run, report that limitation explicitly; never label unrun tests as passing.
+5. Update user-facing documentation and configuration examples in the same change.
+6. Keep credentials, session secrets, personal data, local databases, and backups out of source control.
+7. Commit related changes with descriptive messages. Use a feature branch and pull request for broad changes; do not claim a change is merged unless it is on the default branch.
+8. Report the exact branch, commit, files changed, test commands/results, known limitations, and the next concrete implementation step.
+
+Do not replace existing code with scaffolding merely to make a feature appear complete. No dead buttons, simulated health checks, fake integration status, fabricated test results, or unsupported success claims.
+
+### 20.2 Model adapter requirements
+
+Implement model support through a small, stable adapter interface. A provider preset is configuration metadata, not proof that the endpoint, credentials, model, or free quota are available.
+
+Required initial compatibility targets:
+
+- Local OpenAI-compatible servers: Ollama, LM Studio, and vLLM.
+- Optional hosted OpenAI-compatible APIs: Groq, Cerebras, OpenRouter, Gemini's compatible endpoint, and Hugging Face's router, subject to each provider's current terms and availability.
+- A future LiteRT-LM adapter only after its installed CLI, commands, output format, cancellation behavior, and supported model formats have been detected and verified against real documentation/runtime behavior.
+
+Security and reliability requirements:
+
+- Read credentials from environment variables or a dedicated secret store; never persist or display secret values in ordinary settings, logs, provider metadata, or audit events.
+- Validate endpoint schemes and reject URL credentials, query strings, and fragments. Do not allow user-configured endpoints to silently bypass the application's outbound-network policy.
+- Set bounded timeouts, cap response sizes, validate response structure, sanitize provider errors, and never log authorization headers or full secret-bearing requests.
+- Keep protocol fields such as model, messages, and stream under adapter control. Validate generation parameters and response types.
+- Distinguish “configured” from “reachable,” “authenticated,” and “model available.” Health checks must be explicit, bounded network probes and must not run merely because a settings page was opened.
+- Do not claim a hosted provider is free. Mark free tiers and quotas as time-sensitive and require users to confirm current provider terms.
+- Make streaming, cancellation, retries, model discovery, and failover capability-specific. Do not advertise them until implemented and tested.
+- Failover must be opt-in, bounded, auditable, and respect data-sharing policy; never send private prompts to another provider without clear user configuration.
+- Keep local inference as the default path where configured. Remote inference must be explicit and disclose that prompt data leaves the device.
+
+### 20.3 Provider settings and integration slice
+
+Build the model settings feature end-to-end, not as a static catalog:
+
+1. Present provider presets and a custom-endpoint option with safe defaults.
+2. Let users select a provider and enter a model identifier; store non-secret settings persistently using validated schemas.
+3. Refer to secrets by environment-variable name or secret-store key. Provide setup guidance without accepting or redisplaying raw secret values through ordinary settings APIs.
+4. Offer separate actions for “Save configuration,” “Test connection,” and “Discover models” only when their corresponding service operations are implemented.
+5. Display distinct states for unconfigured, configured, reachable, authentication failure, model missing, and provider error.
+6. Never perform a network request on page load or when listing presets.
+7. Add service, route, UI, and security tests, including SSRF/private-network policy cases for custom URLs.
+8. Document each provider's base URL, credential variable, model identifier requirements, privacy implications, and known limitations.
+
+### 20.4 Persistence, execution, and Self-X priorities
+
+Implement these as sequenced, testable releases:
+
+- **P0 — Verify the foundation:** confirm installation, configuration, database startup, authentication/session/CSRF behavior, health reporting, Windows/Linux compatibility, and CI. Fix actual failures before adding more features.
+- **P1 — Persistent model configuration:** schemas, storage, safe provider catalogue, model settings UI, explicit connection test, and honest status reporting.
+- **P2 — Controlled inference service:** adapter registry, request limits, redacted audit metadata, cancellation/timeouts, normalized errors, and tests using mocked HTTP responses plus optional local-server integration tests.
+- **P3 — Durable jobs:** persisted job state transitions, idempotent enqueueing, worker heartbeats, cancellation semantics, bounded retries, restart recovery, and visible progress in the UI.
+- **P4 — Approval-to-execution path:** connect approval decisions to a policy-enforced executor. Deny by default for unknown tools and sensitive operations; validate permissions again immediately before execution; record outputs and verification evidence.
+- **P5 — Self-X diagnostics and evaluation:** real dependency/database/worker/model checks, repeatable evaluation suites, regression comparisons, proposal review, checkpoints, and rollback of approved changes. Diagnostics must not mutate the system.
+- **P6 — Integrations and skills:** add one integration at a time with least-privilege scopes, explicit configuration, health checks, permission policies, fixtures, and end-to-end tests.
+- **P7 — Release hardening:** migrations from real prior schemas, backup/restore drills, accessibility, browser tests, dependency/security review, packaging, and documented upgrade/rollback paths.
+
+Do not skip a release gate because a feature is described in this master prompt. Mark each capability as implemented, partial, planned, or blocked based on repository evidence.
+
+### 20.5 Definition of done
+
+A feature is done only when its implementation, validation, tests, documentation, and UI behavior agree. The UI must not imply that an operation succeeded before the service confirms it. Network calls, destructive actions, remote data transfer, and privileged execution must be visible and governed by explicit policy.
+
+For each release, publish a concise capability matrix:
+
+| Capability | Status | Evidence required |
+| --- | --- | --- |
+| Implemented | Working end-to-end | Source paths and passing relevant tests |
+| Partial | Some paths work | Explicit limitations and missing paths |
+| Planned | Not implemented yet | No success claims |
+| Blocked | Depends on unresolved issue | Blocker and next action |
+
+A green local test run is not a substitute for CI, and a configured adapter is not proof of provider availability. Keep the default server bound to loopback until the complete authentication, CSRF, origin, and execution security review has passed.
