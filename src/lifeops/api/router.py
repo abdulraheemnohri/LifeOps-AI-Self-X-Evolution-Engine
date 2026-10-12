@@ -21,16 +21,30 @@ def create_api_app(start_background: bool = True) -> FastAPI:
     async def auth_middleware(request: Request, call_next):
         path = request.url.path
         if path.startswith("/api/v1") and path not in PUBLIC_API_PATHS:
-            db = next(get_db())
+            db_generator = get_db()
+            db = next(db_generator)
             try:
-                if auth_enabled(db):
-                    user = current_user_from_request(request, db)
-                    if user is None:
-                        return JSONResponse(status_code=401,
-                                            content={"detail": "Authentication required"})
-                    request.state.user = user
+                from lifeops.storage.models import User
+                users_exist = db.query(User.id).first() is not None
+                # Never leave private API routes open merely because a settings
+                # flag is missing or defaults to false.
+                if not users_exist:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Initial administrator setup required"},
+                    )
+                user = current_user_from_request(request, db)
+                if user is None:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Authentication required"},
+                    )
+                request.state.user = user
             finally:
-                db.close()
+                try:
+                    next(db_generator)
+                except StopIteration:
+                    pass
         return await call_next(request)
 
     # ------------------------------------------------------------------

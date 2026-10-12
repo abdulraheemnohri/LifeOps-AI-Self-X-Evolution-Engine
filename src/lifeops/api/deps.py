@@ -76,7 +76,7 @@ def require_not_stopped(request: Request):
 # true, all /api/v1 routes except health/login require a valid session cookie.
 # ---------------------------------------------------------------------------
 
-PUBLIC_API_PATHS = {"/api/v1/system/health", "/api/v1/auth/login", "/api/v1/auth/status"}
+PUBLIC_API_PATHS = {"/api/v1/system/health", "/api/v1/auth/login", "/api/v1/auth/status", "/api/v1/auth/bootstrap"}
 
 
 def auth_enabled(db: DBSession) -> bool:

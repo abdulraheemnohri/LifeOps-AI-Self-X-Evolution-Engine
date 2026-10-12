@@ -58,7 +58,7 @@ def bootstrap_admin(payload: dict, db: DBSession = Depends(get_db)):
 
 
 @router.post("/auth/login")
-def login(payload: dict, response: Response, db: DBSession = Depends(get_db)):
+def login(payload: dict, request: Request, response: Response, db: DBSession = Depends(get_db)):
     username = payload.get("username", "")
     password = payload.get("password", "")
     user = db.query(User).filter_by(username=username).first()
@@ -77,7 +77,7 @@ def logout(request: Request, response: Response, db: DBSession = Depends(get_db)
     sid = request.cookies.get("lifeops_session")
     if sid:
         revoke_session(db, sid)
-    response.delete_cookie("lifeops_session")
+    response.delete_cookie("lifeops_session", path="/")
     return {"status": "ok"}
 
 
