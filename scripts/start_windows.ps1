@@ -1,8 +1,5 @@
-# Windows PowerShell Start Script
-Write-Host "=== Starting LifeOps AI Web UI ==="
-if (Test-Path "venv") {
-    .\venv\Scripts\Activate.ps1
-}
-
-$env:PYTHONPATH="."
-uvicorn lifeops.main:app --host 127.0.0.1 --port 8000 --reload
+$ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent $PSScriptRoot
+Set-Location $Root
+if (-not (Test-Path ".venv\Scripts\python.exe")) { throw "Virtual environment not found. Run .\scripts\install_windows.ps1 first." }
+& .\.venv\Scripts\python.exe -m lifeops.app
