@@ -109,9 +109,71 @@ async def proposal_decision_route(request):
     return RedirectResponse("/selfx",status_code=303)
 
 async def settings_page(request):
-    body='''<section class="panel"><p class="eyebrow">CONFIGURATION</p><h2>Local-first defaults</h2><div class="capability"><span>Network binding</span><b>127.0.0.1 (loopback)</b></div><div class="capability"><span>Storage</span><b>SQLite · data/lifeops.db</b></div><div class="capability"><span>Model runtime</span><b class="muted">Not configured</b></div><div class="capability"><span>Telemetry</span><b>Disabled</b></div><p class="hint">Advanced settings and authentication controls are not yet available. Do not expose this development build to an untrusted network.</p></section>'''
-    return page("Settings",body)
+    from .models.provider_catalog import list_provider_presets, PROVIDER_PRESETS
+    from .storage.models import Setting
+    presets = list_provider_presets()
+    with db_session() as db:
+        row = db.get(Setting, "model_provider")
+        config = dict(row.value) if row and isinstance(row.value, dict) else {}
+    selected = str(config.get("provider_id", "ollama"))
+    model = str(config.get("model", ""))
+    timeout = int(config.get("timeout_seconds", 60))
+    endpoint = str(config.get("base_url_override", ""))
+    options = "".join(
+        f'<option value="{escape(p["id"])}" {"selected" if p["id"] == selected else ""}>{escape(p["id"])}</option>'
+        for p in presets
+    )
+    body = f"""<section class="panel"><p class="eyebrow">MODEL MANAGER</p><h2>Provider configuration</h2>
+    <p class="hint">Saving does not contact a provider. Credentials remain in your environment; this form never accepts or displays secret values.</p>
+    <form class="task-form" method="post" action="/settings/model">
+    <label>Provider<select name="provider_id" required>{options}</select></label>
+    <label>Model identifier<input name="model" maxlength="240" required value="{escape(model)}" placeholder="Enter an installed or provider-supported model ID"></label>
+    <label>Optional endpoint override<input name="base_url_override" maxlength="500" value="{escape(endpoint)}" placeholder="Leave blank to use provider default"></label>
+    <label>Request timeout (seconds)<input name="timeout_seconds" type="number" min="1" max="120" value="{timeout}" required></label>
+    <button class="button" type="submit">Save model settings</button></form>
+    <div class="capability"><span>Selected provider</span><b>{escape(selected)}</b></div>
+    <div class="capability"><span>Connection status</span><b class="muted">Not tested</b></div>
+    <p class="hint">Hosted providers may transmit prompts outside this machine. Use local endpoints for private content. Custom endpoints are restricted to HTTP(S) loopback or explicitly preset hosted endpoints.</p>
+    </section>"""
+    return page("Settings", body)
 
+async def save_model_settings(request):
+    from datetime import datetime, timezone
+    from .models.provider_catalog import PROVIDER_PRESETS
+    from .storage.models import Setting
+    form = await request.form()
+    provider_id = str(form.get("provider_id", "")).strip().lower()
+    model = str(form.get("model", "")).strip()
+    endpoint = str(form.get("base_url_override", "")).strip()
+    try:
+        timeout = int(str(form.get("timeout_seconds", "60")))
+        if provider_id not in PROVIDER_PRESETS:
+            raise ValueError("Choose a supported provider preset.")
+        if not model or len(model) > 240:
+            raise ValueError("Model identifier must contain 1–240 characters.")
+        if not 1 <= timeout <= 120:
+            raise ValueError("Timeout must be between 1 and 120 seconds.")
+        if endpoint:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(endpoint)
+            if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"} or parsed.port is None or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError("Endpoint overrides must be explicit HTTP loopback URLs with a port and no credentials, query, or fragment.")
+            if parsed.port < 1 or parsed.port > 65535:
+                raise ValueError("Endpoint port is invalid.")
+        safe = {"provider_id": provider_id, "model": model, "base_url_override": endpoint, "timeout_seconds": timeout}
+        with db_session() as db:
+            row = db.get(Setting, "model_provider")
+            if row is None:
+                db.add(Setting(key="model_provider", value=safe))
+            else:
+                row.value = safe
+                row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.commit()
+            db.add(AuditEvent(event_type="settings.model_provider.updated", details=f"provider={provider_id};model_configured=true"))
+            db.commit()
+    except (ValueError, TypeError) as exc:
+        return page("Settings", f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/settings">Back to settings</a></section>')
+    return RedirectResponse("/settings", status_code=303)
 
 async def projects_page(request):
     with db_session() as db: projects=list_projects(db)
@@ -326,7 +388,7 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"error":"csrf_validation_failed"},status_code=403)
         return await call_next(request)
 
-routes=[Route("/setup",setup_page,methods=["GET"]),Route("/setup",setup_submit,methods=["POST"]),Route("/login",login_page,methods=["GET"]),Route("/login",login_submit,methods=["POST"]),Route("/logout",logout_route,methods=["POST"]),Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
+routes=[Route("/setup",setup_page,methods=["GET"]),Route("/setup",setup_submit,methods=["POST"]),Route("/login",login_page,methods=["GET"]),Route("/login",login_submit,methods=["POST"]),Route("/logout",logout_route,methods=["POST"]),Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/settings/model",save_model_settings,methods=["POST"]),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
 app.add_middleware(LocalAuthMiddleware)
 if __name__=="__main__":
