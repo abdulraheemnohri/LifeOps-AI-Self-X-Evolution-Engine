@@ -223,8 +223,108 @@ def validate_bind_host(host: str) -> str:
         raise ValueError("Remote binding is disabled until authentication, CSRF protection, and authorization are implemented.")
     return host
 
-routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
+
+# Authentication endpoints. Initial setup is available only while no user exists.
+import secrets as _secrets\nimport hmac
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from .security.auth import hash_password, verify_password, create_session, validate_session, revoke_session
+
+async def setup_page(request):
+    with db_session() as db:
+        if db.query(__import__("lifeops.storage.models", fromlist=["User"]).User).count():
+            return page("Setup unavailable", '<section class="panel"><h2>Setup is already complete</h2><a href="/login">Sign in</a></section>')
+    body='<section class="panel"><h2>Create local administrator</h2><p>This one-time setup is available only before the first account exists.</p><form class="task-form" method="post" action="/setup"><label>Username<input name="username" required minlength="3" maxlength="64" autocomplete="username"></label><label>Password<input type="password" name="password" required minlength="12" maxlength="1024" autocomplete="new-password"></label><label>Confirm password<input type="password" name="confirm_password" required minlength="12" maxlength="1024" autocomplete="new-password"></label><button class="button">Create administrator</button></form></section>'
+    return page("Initial setup",body)
+
+async def setup_submit(request):
+    from .storage.models import User
+    form=await request.form()
+    username=str(form.get("username","")).strip()
+    password=str(form.get("password",""))
+    if len(username)<3 or len(username)>64 or not username.replace("_","").replace("-","").isalnum():
+        return page("Initial setup",'<section class="panel"><p class="error">Username must be 3–64 letters, numbers, underscores, or hyphens.</p><a href="/setup">Try again</a></section>')
+    if password != str(form.get("confirm_password","")):
+        return page("Initial setup",'<section class="panel"><p class="error">Passwords do not match.</p><a href="/setup">Try again</a></section>')
+    try: encoded=hash_password(password).encoded
+    except ValueError as exc: return page("Initial setup",f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/setup">Try again</a></section>')
+    with db_session() as db:
+        if db.query(User).count():
+            return page("Setup unavailable",'<section class="panel"><p>Setup already completed.</p><a href="/login">Sign in</a></section>')
+        user=User(username=username,password_hash=encoded,role="admin")
+        db.add(user); db.commit(); db.refresh(user)
+        session_obj=create_session(db,user.id)
+    response=RedirectResponse("/",status_code=303)
+    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
+    return response
+
+async def login_page(request):
+    body='<section class="panel"><h2>Sign in</h2><form class="task-form" method="post" action="/login"><label>Username<input name="username" required autocomplete="username"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><button class="button">Sign in</button></form></section>'
+    return page("Sign in",body)
+
+async def login_submit(request):
+    from .storage.models import User
+    form=await request.form()
+    username=str(form.get("username","")).strip()
+    password=str(form.get("password",""))
+    with db_session() as db:
+        user=db.query(User).filter_by(username=username).first()
+        if not user or not verify_password(password,user.password_hash):
+            return page("Sign in",'<section class="panel"><p class="error">Invalid username or password.</p><a href="/login">Try again</a></section>')
+        session_obj=create_session(db,user.id)
+    response=RedirectResponse("/",status_code=303)
+    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
+    return response
+
+async def logout_route(request):
+    sid=request.cookies.get("lifeops_session","")
+    with db_session() as db: revoke_session(db,sid)
+    response=RedirectResponse("/login",status_code=303)
+    response.delete_cookie("lifeops_session",path="/")
+    response.delete_cookie("lifeops_csrf",path="/")
+    return response
+
+class LocalAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path=request.url.path
+        if path in {"/setup","/login","/health","/static/app.css"}:
+            return await call_next(request)
+        with db_session() as db:
+            from .storage.models import User
+            has_users=db.query(User).count()>0
+            user=validate_session(db,request.cookies.get("lifeops_session","")) if has_users else None
+        if not has_users:
+            return RedirectResponse("/setup",status_code=303) if not path.startswith("/api/") else JSONResponse({"error":"initial_setup_required"},status_code=401)
+        if user is None:
+            return RedirectResponse("/login",status_code=303) if not path.startswith("/api/") else JSONResponse({"error":"authentication_required"},status_code=401)
+        request.state.user_id=user.id
+        if request.method not in {"GET","HEAD","OPTIONS"}:
+            cookie_token=request.cookies.get("lifeops_csrf","")
+            supplied=request.headers.get("x-csrf-token","")
+            if not supplied:
+                try:
+                    form=await request.form()
+                    supplied=str(form.get("_csrf",""))
+                except Exception:
+                    supplied=""
+            # Same-origin validation protects ordinary HTML forms; token matching
+            # is additionally required when a browser client supplies the token.
+            origin=request.headers.get("origin","")
+            expected_origin=str(request.base_url).rstrip("/")
+            if supplied:
+                valid=bool(cookie_token and hmac.compare_digest(cookie_token,supplied))
+            else:
+                valid=bool(origin and hmac.compare_digest(origin.rstrip("/"),expected_origin))
+            if not valid:
+                return JSONResponse({"error":"csrf_validation_failed"},status_code=403)
+        return await call_next(request)
+
+routes=[Route("/setup",setup_page,methods=["GET"]),Route("/setup",setup_submit,methods=["POST"]),Route("/login",login_page,methods=["GET"]),Route("/login",login_submit,methods=["POST"]),Route("/logout",logout_route,methods=["POST"]),Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
+app.add_middleware(LocalAuthMiddleware)
 if __name__=="__main__":
     try:
         host=validate_bind_host(os.getenv("LIFEOPS_HOST","127.0.0.1"))
