@@ -1,0 +1,21 @@
+[app]
+app_name = "LifeOps AI + Self-X Evolution Engine"
+host = "127.0.0.1"
+port = 8000
+environment = "development"
+secret_key = "change-this-in-production-use-strong-random-key"
+data_dir = "data"
+workspace_dir = "workspace"
+
+[database]
+url = "sqlite:///data/lifeops.db"
+
+[models]
+default_runtime = "litert"
+litert_binary_path = "litert-lm"
+model_path = ""
+context_length = 4096
+temperature = 0.7
+
+[autonomy]
+profile = "Supervised Mode"
