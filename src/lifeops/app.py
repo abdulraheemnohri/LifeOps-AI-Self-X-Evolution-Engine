@@ -9,7 +9,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, JSONResponse, Pl
 from starlette.routing import Route
 from . import __version__
 from .database import init_db, get_session_factory, Task, AuditEvent
-from .services import create_task, list_tasks, complete_task, create_note, list_notes, create_project, list_projects, create_memory, search_memories, create_approval, list_approvals, decide_approval, create_agent_run, ValidationError
+from .services import create_task, list_tasks, complete_task, create_note, list_notes, create_project, list_projects, create_memory, search_memories, create_approval, list_approvals, decide_approval, create_agent_run, create_self_goal, create_improvement_proposal, decide_improvement_proposal, ValidationError
 
 @asynccontextmanager
 async def lifespan(app):
@@ -67,9 +67,43 @@ async def create_note_route(request):
     return RedirectResponse("/notes",status_code=303)
 
 async def selfx_page(request):
-    with db_session() as db: task_count=len(list_tasks(db)); note_count=len(list_notes(db)); audit_count=db.query(AuditEvent).count()
-    body=f'''<section class="hero compact"><div><p class="eyebrow">SELF-X CONTROL CENTER</p><h2>Observe first. Improve safely.</h2><p>Diagnostics report what this installation can verify today.</p></div><div class="orb">✳</div></section><section class="stats"><article class="stat"><span>Database</span><strong class="healthy">Connected</strong><small>SQLite session succeeded</small></article><article class="stat"><span>Tasks</span><strong>{task_count}</strong><small>Persistent records</small></article><article class="stat"><span>Notes</span><strong>{note_count}</strong><small>Persistent records</small></article><article class="stat"><span>Audit events</span><strong>{audit_count}</strong><small>Service actions recorded</small></article></section><section class="panel"><h2>Capability report</h2><div class="capability"><span>Local task and note services</span><b class="healthy">Available</b></div><div class="capability"><span>Model inference adapter</span><b class="muted">Not configured</b></div><div class="capability"><span>Autonomous tool execution</span><b class="muted">Not implemented in this phase</b></div><div class="capability"><span>Isolated self-repair and rollback</span><b class="muted">Not implemented in this phase</b></div><p class="hint">Self-X must not claim success without evidence. Later phases will add versioned evaluations, approval-gated repair proposals, and recovery checkpoints.</p></section>'''
+    from .database import SelfGoal, Evaluation, ImprovementProposal
+    with db_session() as db:
+        task_count=len(list_tasks(db)); note_count=len(list_notes(db)); audit_count=db.query(AuditEvent).count()
+        goals=db.query(SelfGoal).order_by(SelfGoal.id.desc()).limit(20).all()
+        evaluations=db.query(Evaluation).order_by(Evaluation.id.desc()).limit(20).all()
+        proposals=db.query(ImprovementProposal).order_by(ImprovementProposal.id.desc()).limit(20).all()
+    goal_cards=''.join(f'<article class="note"><h3>{escape(g.title)}</h3><p>{escape(g.objective)}</p><small>Status: {escape(g.status)} · Baseline: {escape(g.baseline or "not set")} · Target: {escape(g.target or "not set")}</small></article>' for g in goals) or '<div class="empty">No improvement goals recorded.</div>'
+    evaluation_cards=''.join(f'<article class="note"><h3>{escape(e.name)}</h3><p>Suite {escape(e.suite_version)} · Score: {("not scored" if e.score is None else format(e.score, ".3f"))}</p><small>{escape(e.details[:500])}</small></article>' for e in evaluations) or '<div class="empty">No evaluation records yet.</div>'
+    proposal_cards=[]
+    for p in proposals:
+        card=f'<article class="note"><span class="priority {escape(p.risk if p.risk in {"low","medium","high"} else "high")}">{escape(p.risk)}</span><h3>{escape(p.title)}</h3><p>{escape(p.problem)}</p><small>Status: {escape(p.status)}</small>'
+        if p.status == "proposed": card += f'<div class="approval-actions"><form method="post" action="/selfx/proposals/{p.id}/decision"><input type="hidden" name="decision" value="approve"><button class="button">Approve trial</button></form><form method="post" action="/selfx/proposals/{p.id}/decision"><input type="hidden" name="decision" value="reject"><button class="icon-button">Reject</button></form></div>'
+        proposal_cards.append(card+'</article>')
+    proposal_html=''.join(proposal_cards) or '<div class="empty">No improvement proposals recorded.</div>'
+    body=f'''<section class="hero compact"><div><p class="eyebrow">SELF-X CONTROL CENTER</p><h2>Observe first. Improve safely.</h2><p>Record measurable goals, evaluation evidence, and reviewable proposals.</p></div><div class="orb">✳</div></section><section class="stats"><article class="stat"><span>Database</span><strong class="healthy">Connected</strong><small>SQLite session succeeded</small></article><article class="stat"><span>Tasks</span><strong>{task_count}</strong><small>Persistent records</small></article><article class="stat"><span>Notes</span><strong>{note_count}</strong><small>Persistent records</small></article><article class="stat"><span>Audit events</span><strong>{audit_count}</strong><small>Service actions recorded</small></article></section><section class="panel"><h2>Improvement goal</h2><form class="task-form" method="post" action="/selfx/goals"><label>Title<input name="title" maxlength="240" required></label><label>Objective<textarea name="objective" maxlength="5000" required></textarea></label><label>Baseline<input name="baseline" maxlength="5000"></label><label>Target<input name="target" maxlength="5000"></label><button class="button">Save goal</button></form></section><section class="notes-grid">{goal_cards}</section><section class="panel"><h2>Improvement proposal</h2><form class="task-form" method="post" action="/selfx/proposals"><label>Title<input name="title" maxlength="240" required></label><label>Problem<textarea name="problem" maxlength="10000" required></textarea></label><label>Evidence<textarea name="evidence" maxlength="10000"></textarea></label><label>Expected benefit<textarea name="expected_benefit" maxlength="10000"></textarea></label><label>Risk<select name="risk"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select></label><label>Rollback plan<textarea name="rollback_plan" maxlength="10000" required></textarea></label><button class="button">Submit proposal</button></form></section><section class="notes-grid">{proposal_html}</section><section class="panel"><h2>Evaluation history</h2>{evaluation_cards}<p class="hint">This page records evidence; it does not run repairs or deploy code. Approval permits only a separately sandboxed trial.</p></section>'''
     return page("Self-X Diagnostics",body)
+
+async def create_goal_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: create_self_goal(db,str(form.get("title","")),str(form.get("objective","")),str(form.get("baseline","")),str(form.get("target","")))
+    except ValidationError as exc: return page("Self-X Diagnostics",f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/selfx">Back</a></section>')
+    return RedirectResponse("/selfx",status_code=303)
+
+async def create_proposal_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: create_improvement_proposal(db,str(form.get("title","")),str(form.get("problem","")),str(form.get("evidence","")),str(form.get("expected_benefit","")),str(form.get("risk","medium")),str(form.get("rollback_plan","")))
+    except ValidationError as exc: return page("Self-X Diagnostics",f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/selfx">Back</a></section>')
+    return RedirectResponse("/selfx",status_code=303)
+
+async def proposal_decision_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: decide_improvement_proposal(db,int(request.path_params["proposal_id"]),approve=form.get("decision")=="approve",reason="Reviewed through local UI")
+    except (ValueError,LookupError,ValidationError) as exc: return PlainTextResponse(str(exc),status_code=409)
+    return RedirectResponse("/selfx",status_code=303)
 
 async def settings_page(request):
     body='''<section class="panel"><p class="eyebrow">CONFIGURATION</p><h2>Local-first defaults</h2><div class="capability"><span>Network binding</span><b>127.0.0.1 (loopback)</b></div><div class="capability"><span>Storage</span><b>SQLite · data/lifeops.db</b></div><div class="capability"><span>Model runtime</span><b class="muted">Not configured</b></div><div class="capability"><span>Telemetry</span><b>Disabled</b></div><p class="hint">Advanced settings and authentication controls are not yet available. Do not expose this development build to an untrusted network.</p></section>'''
@@ -183,7 +217,7 @@ async def stylesheet(request):
     if not css.exists(): return PlainTextResponse("Stylesheet missing",status_code=404)
     return PlainTextResponse(css.read_text(encoding="utf-8"),media_type="text/css")
 
-routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
+routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
 if __name__=="__main__":
     host=os.getenv("LIFEOPS_HOST","127.0.0.1")
