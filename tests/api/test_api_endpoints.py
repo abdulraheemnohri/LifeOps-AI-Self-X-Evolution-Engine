@@ -1,22 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
 from lifeops.storage.database import get_engine, init_db, get_session_factory
-from lifeops.api.router import app, get_db
+from lifeops.api.router import app
+from lifeops.api.deps import set_test_session_factory
 
 def test_api_endpoints(tmp_path):
     db_path = tmp_path / "test.db"
     engine = get_engine(f"sqlite:///{db_path}")
     init_db(engine)
     session_factory = get_session_factory(engine)
+    set_test_session_factory(session_factory)
 
-    def override_get_db():
-        db = session_factory()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
     client = TestClient(app)
 
     # Health check
