@@ -217,9 +217,17 @@ async def stylesheet(request):
     if not css.exists(): return PlainTextResponse("Stylesheet missing",status_code=404)
     return PlainTextResponse(css.read_text(encoding="utf-8"),media_type="text/css")
 
+def validate_bind_host(host: str) -> str:
+    """Reject remote listeners until authentication and CSRF controls exist."""
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        raise ValueError("Remote binding is disabled until authentication, CSRF protection, and authorization are implemented.")
+    return host
+
 routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/selfx/goals",create_goal_route,methods=["POST"]),Route("/selfx/proposals",create_proposal_route,methods=["POST"]),Route("/selfx/proposals/{proposal_id:int}/decision",proposal_decision_route,methods=["POST"]),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
 if __name__=="__main__":
-    host=os.getenv("LIFEOPS_HOST","127.0.0.1")
-    if host not in {"127.0.0.1","localhost","::1"} and os.getenv("LIFEOPS_ALLOW_REMOTE","").lower()!="true": raise SystemExit("Remote binding blocked. Set LIFEOPS_ALLOW_REMOTE=true only after configuring authentication and network protections.")
-    uvicorn.run(app,host=host,port=int(os.getenv("LIFEOPS_PORT","5001")) )
+    try:
+        host=validate_bind_host(os.getenv("LIFEOPS_HOST","127.0.0.1"))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    uvicorn.run(app,host=host,port=int(os.getenv("LIFEOPS_PORT","5001")))
