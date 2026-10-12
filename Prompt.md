@@ -1547,3 +1547,49 @@ For each release, publish a concise capability matrix:
 | Blocked | Depends on unresolved issue | Blocker and next action |
 
 A green local test run is not a substitute for CI, and a configured adapter is not proof of provider availability. Keep the default server bound to loopback until the complete authentication, CSRF, origin, and execution security review has passed.
+
+---
+
+## 21. Live repository checkpoint — 2026-10-12
+
+This checkpoint records repository evidence and supplements (but does not replace) the requirements above. Treat the status below as a snapshot; re-inspect the repository and latest CI results before relying on it.
+
+### 21.1 Existing repository and implementation baseline
+
+- Default branch: `main`.
+- Active implementation branch at this checkpoint: `feat/local-auth-session-foundation`.
+- Runtime target: Python 3.12+, Windows 10/11 and Linux.
+- Existing application includes browser pages and persisted services for tasks, notes, projects, memories, approvals, agent-run records, Self-X goals, and improvement proposals.
+- Existing security-related work includes password hashing, opaque cookie sessions, and request-origin/CSRF checks; these still require full end-to-end security review.
+- The README explicitly identifies the application as a development build and documents important release blockers. Keep those limitations visible until evidence changes.
+
+### 21.2 Model adapter progress on the feature branch
+
+The following files have been added or updated on `feat/local-auth-session-foundation`; these changes are not assumed to be merged into `main`:
+
+- `src/lifeops/models/openai_compatible.py`: synchronous, non-streaming OpenAI-compatible chat-completions adapter; reads API keys from environment variables, bounds timeouts, validates endpoint URLs and response shape, and sanitizes provider errors.
+- `src/lifeops/models/provider_catalog.py`: explicit presets for local Ollama, LM Studio, and vLLM endpoints, plus optional hosted Groq, Cerebras, OpenRouter, Gemini-compatible, and Hugging Face endpoints.
+- `tests/unit/test_openai_compatible.py` and `tests/unit/test_provider_catalog.py`: unit coverage for adapter validation, request behavior, safe metadata, and preset construction.
+- `docs/model-providers.md`: provider setup and privacy notes.
+
+These files are a foundation, not an end-to-end model-management feature. Preset listing and adapter construction do not prove a provider is reachable, a key is valid, a model exists, or a hosted tier is free. The current adapter does not yet provide streaming, cancellation, discovery, retries, or failover. Do not wire it to autonomous execution until policy checks and approval enforcement are verified.
+
+### 21.3 Verification status
+
+At the time this checkpoint was written, the GitHub connector reported no combined status checks and no workflow runs for the latest provider-catalog commit. Therefore, CI and test success are **unverified**, not passing. Re-check GitHub Actions and run the documented checks in a real supported environment.
+
+### 21.4 Next implementation slice — persistent model settings
+
+Implement the next vertical slice on the feature branch, preserving the current app and tests:
+
+1. Inspect the actual storage models, service layer, API router, app settings page, authentication dependencies, and migration setup before editing.
+2. Add a persistent, validated model-provider configuration that stores provider ID, model identifier, endpoint override when allowed, timeout, and the *name* of a credential environment variable—not its secret value.
+3. Ensure settings responses, audit events, HTML, exceptions, and logs never expose credentials. Do not accept an API-key value in ordinary settings forms.
+4. Add an authenticated settings UI for selecting a known provider, setting the model identifier, and saving non-secret configuration. Keep the currently selected provider clearly distinct from connection health.
+5. Add an explicit “Test connection” operation only if it performs a bounded, opt-in network request and returns a sanitized status. Do not probe providers on page load.
+6. Enforce outbound endpoint policy for custom URLs, including loopback/local-only policy defaults and protection against unsafe schemes and unexpected private-network targets. A custom endpoint must not become an SSRF bypass.
+7. Add storage/service/API/UI tests for valid saves, invalid inputs, unauthorized access, secret redaction, local endpoints, hosted credentials missing, provider failures, and no network calls during page render.
+8. Update documentation and the capability matrix. Run tests if an execution environment is available; otherwise state that they were not run.
+9. Commit the implementation to the feature branch and open or update a pull request for review. Do not silently merge broad security-sensitive changes into `main`.
+
+After this slice, continue through controlled inference, durable jobs and cancellation, approval-to-execution wiring, real Self-X diagnostics/evaluations, integrations, and release hardening in the order defined in section 20.4. Each slice must include code, tests, docs, and honest verification results; do not treat this checkpoint as permission to skip review or claim the whole platform is complete.
