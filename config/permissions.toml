@@ -1,0 +1,17 @@
+[permissions]
+# Default execution policy: ALLOW, ASK, or BLOCK
+
+[permissions.filesystem]
+read = "ALLOW"
+write = "ASK"
+delete = "ASK"
+
+[permissions.terminal]
+execute = "ASK"
+
+[permissions.browser]
+navigate = "ALLOW"
+interact = "ASK"
+
+[permissions.network]
+outbound = "ASK"
