@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
-from .database import Task, Note, Memory, Project, Approval, AgentRun, AuditEvent
+from .database import Task, Note, Memory, Project, Approval, AgentRun, SelfGoal, Evaluation, ImprovementProposal, AuditEvent
 VALID_PRIORITIES = {"low", "medium", "high"}
 class ValidationError(ValueError): pass
 
@@ -135,3 +135,39 @@ def create_agent_run(db: Session, request: str) -> AgentRun:
     run = AgentRun(request=request, status="needs_input", error="Model runtime is not configured; no actions were executed.")
     db.add(run); _audit(db, "agent_run.created", "stored request; execution unavailable without model adapter")
     db.commit(); db.refresh(run); return run
+
+def create_self_goal(db: Session, title: str, objective: str, baseline: str, target: str) -> SelfGoal:
+    title, objective = title.strip(), objective.strip()
+    if not title or len(title) > 240 or not objective or len(objective) > 5000:
+        raise ValidationError("Goal title and objective are required and must fit their limits.")
+    if len(baseline) > 5000 or len(target) > 5000: raise ValidationError("Baseline and target must be at most 5,000 characters.")
+    goal = SelfGoal(title=title, objective=objective, baseline=baseline.strip(), target=target.strip())
+    db.add(goal); _audit(db, "selfx.goal.created", f"title={title}"); db.commit(); db.refresh(goal); return goal
+
+def create_evaluation_record(db: Session, name: str, suite_version: str, *, score: float | None, details: str = "") -> Evaluation:
+    name, suite_version = name.strip(), suite_version.strip()
+    if not name or len(name) > 240 or not suite_version or len(suite_version) > 80:
+        raise ValidationError("Evaluation name and suite version are required.")
+    if score is not None and not 0.0 <= score <= 1.0: raise ValidationError("Score must be between 0 and 1.")
+    if len(details) > 20000: raise ValidationError("Evaluation details exceed 20,000 characters.")
+    record = Evaluation(name=name, suite_version=suite_version, score=score, details=details[:20000])
+    db.add(record); _audit(db, "selfx.evaluation.recorded", f"name={name};score={score}"); db.commit(); db.refresh(record); return record
+
+def create_improvement_proposal(db: Session, title: str, problem: str, evidence: str, expected_benefit: str, risk: str, rollback_plan: str) -> ImprovementProposal:
+    title, problem, rollback_plan = title.strip(), problem.strip(), rollback_plan.strip()
+    if not title or len(title) > 240 or not problem or not rollback_plan:
+        raise ValidationError("Proposal title, problem, and rollback plan are required.")
+    if risk not in {"low", "medium", "high", "critical"}: raise ValidationError("Invalid risk classification.")
+    if any(len(v) > 10000 for v in (problem, evidence, expected_benefit, rollback_plan)):
+        raise ValidationError("Proposal fields must be at most 10,000 characters.")
+    proposal = ImprovementProposal(title=title, problem=problem, evidence=evidence, expected_benefit=expected_benefit, risk=risk, rollback_plan=rollback_plan)
+    db.add(proposal); _audit(db, "selfx.improvement.proposed", f"title={title};risk={risk}"); db.commit(); db.refresh(proposal); return proposal
+
+def decide_improvement_proposal(db: Session, proposal_id: int, *, approve: bool, reason: str = "") -> ImprovementProposal:
+    proposal = db.get(ImprovementProposal, proposal_id)
+    if proposal is None: raise LookupError("Improvement proposal not found.")
+    if proposal.status != "proposed": raise ValidationError("Proposal has already been reviewed.")
+    # Approval means permission to run a separately sandboxed trial, not automatic deployment.
+    proposal.status = "approved_for_trial" if approve else "rejected"
+    _audit(db, f"selfx.improvement.{proposal.status}", f"proposal_id={proposal.id};reason={reason[:500]}")
+    db.commit(); db.refresh(proposal); return proposal
