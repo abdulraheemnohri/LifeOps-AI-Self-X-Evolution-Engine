@@ -1,24 +1,37 @@
-# Model providers
+# Model provider configuration
 
-LifeOps supports a local-first design. A provider is used only when an administrator explicitly configures it. Keep the default model set to the deterministic mock adapter until a real runtime is configured.
+LifeOps uses one OpenAI-compatible adapter for compatible local servers and explicitly configured hosted endpoints. Provider presets are configuration helpers, not a guarantee that a model exists, a server is reachable, or an account has free quota.
 
-## Local adapters
+## Local endpoints
 
-- **Ollama**: local model server; the adapter can use its OpenAI-compatible API at `http://127.0.0.1:11434/v1`. Install Ollama separately and download a model. See [official compatibility documentation](https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx).
-- **LiteRT-LM**: optional Python runtime using a local `.litertlm` model file. Install the runtime separately and validate model compatibility. See [LiteRT-LM Python API](https://developers.google.cn/edge/litert-lm/python).
-- **Other local servers**: LM Studio and vLLM can be connected when their OpenAI-compatible endpoint is explicitly configured.
+| Preset | Default endpoint | Notes |
+|---|---|---|
+| `ollama` | `http://127.0.0.1:11434/v1` | Start Ollama and pull a model separately. |
+| `lm_studio` | `http://127.0.0.1:1234/v1` | Enable the local server in LM Studio. |
+| `vllm` | `http://127.0.0.1:8000/v1` | Start a compatible vLLM OpenAI server. |
 
-## Hosted endpoints with potential free tiers
+## Hosted endpoints
 
-The generic OpenAI-compatible adapter can connect to providers exposing `POST /chat/completions`. Examples include Groq, Cerebras, OpenRouter, and Google's Gemini OpenAI-compatible endpoint. Hugging Face provides a model router with compatible interfaces for supported models.
+| Preset | Environment variable | Notes |
+|---|---|---|
+| `groq` | `GROQ_API_KEY` | Provider account and applicable quota required. |
+| `cerebras` | `CEREBRAS_API_KEY` | Provider account and applicable quota required. |
+| `openrouter` | `OPENROUTER_API_KEY` | Model availability and pricing vary by model. |
+| `gemini` | `GEMINI_API_KEY` | Use a model supported by the provider's compatible API. |
+| `huggingface` | `HF_TOKEN` | Endpoint/model compatibility and quota vary. |
 
-1. Create an account with the provider and check its current model list, data policy, rate limits, and free-tier terms.
-2. Set the provider key in the environment (for example, `GROQ_API_KEY` or `GEMINI_API_KEY`).
-3. Copy `config/model-providers.example.toml` to a private configuration file and choose a model that your account can access.
-4. Never commit real keys, put them in browser code, or pass them in URLs.
+Set credentials in the process environment or a protected secret manager. Never place API keys in browser code, URLs, committed configuration, or screenshots. Do not assume hosted services are free; verify each provider's current terms and quota.
 
-"Free online adapters" means adapters for services that may offer free quotas, not guaranteed unlimited free inference. Provider quotas, eligible models, and terms can change. Hosted inference sends prompt data to the selected provider; keep sensitive personal data on local models unless you explicitly accept that provider's privacy terms.
+## Python usage
 
-## Current limitations
+```python
+from lifeops.models.provider_catalog import create_provider_adapter
 
-The initial adapter supports non-streaming text chat only. It does not yet implement provider-specific tool calls, image/audio inputs, embeddings, automatic failover, or live model discovery across every provider. Health metadata confirms configuration shape, not successful network inference. Do not expose arbitrary endpoint URLs to untrusted users; configure trusted endpoints locally.
+adapter = create_provider_adapter("ollama", model="your-installed-model")
+text = adapter.generate("Summarize the purpose of LifeOps.")
+print(text)
+```
+
+`is_available()` reports that adapter configuration is present; it does not probe the endpoint. A successful `generate()` call is the actual inference check. The initial adapter is synchronous, non-streaming, and does not implement automatic failover. Configure one provider explicitly and handle `ProviderError` in the calling service.
+
+Hosted provider requests send prompt content outside the machine. Keep the default local-first policy and do not route private content to hosted providers without user configuration and authorization.
