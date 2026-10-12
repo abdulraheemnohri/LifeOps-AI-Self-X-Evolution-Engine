@@ -5,7 +5,7 @@ from lifeops.database import Base, Task, AuditEvent
 from lifeops.services import (
     ValidationError, create_task, list_tasks, complete_task, create_note,
     create_project, create_memory, search_memories, create_approval,
-    decide_approval, create_agent_run,
+    decide_approval, create_agent_run, create_self_goal, create_evaluation_record, create_improvement_proposal, decide_improvement_proposal,
 )
 from lifeops.policy import Decision, decide
 
@@ -53,3 +53,17 @@ def test_policy_hard_blocks_and_approval():
     assert decide("disable_authentication", autonomy="bounded").decision == Decision.BLOCK
     assert decide("delete_file", autonomy="bounded").decision == Decision.ASK
     assert decide("create_task", autonomy="supervised").decision == Decision.ALLOW
+
+def test_selfx_records_and_approval_stops_at_trial(db):
+    goal = create_self_goal(db, "Improve retrieval", "Raise test relevance", "0.60", "0.80")
+    assert goal.status == "active"
+    evaluation = create_evaluation_record(db, "retrieval-suite", "v1", score=0.75, details="fixed fixture")
+    assert evaluation.score == 0.75
+    proposal = create_improvement_proposal(db, "Tune ranking", "Low relevance", "Fixture scores", "Higher recall", "low", "Revert ranking config")
+    decide_improvement_proposal(db, proposal.id, approve=True, reason="test evidence reviewed")
+    assert proposal.status == "approved_for_trial"
+    assert "deployed" not in proposal.status
+
+def test_evaluation_rejects_invalid_score(db):
+    with pytest.raises(ValidationError):
+        create_evaluation_record(db, "suite", "v1", score=1.5)
