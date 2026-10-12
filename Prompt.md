@@ -1593,3 +1593,22 @@ Implement the next vertical slice on the feature branch, preserving the current 
 9. Commit the implementation to the feature branch and open or update a pull request for review. Do not silently merge broad security-sensitive changes into `main`.
 
 After this slice, continue through controlled inference, durable jobs and cancellation, approval-to-execution wiring, real Self-X diagnostics/evaluations, integrations, and release hardening in the order defined in section 20.4. Each slice must include code, tests, docs, and honest verification results; do not treat this checkpoint as permission to skip review or claim the whole platform is complete.
+
+---
+
+## 22. Model settings vertical slice — 2026-10-12
+
+Implementation branch: `feat/local-auth-session-foundation`.
+
+Added in this slice:
+- The existing authenticated Settings page now reads the `model_provider` record from the SQLAlchemy `Setting` table and exposes a browser form for provider preset, model identifier, optional endpoint override, and bounded timeout.
+- A POST route persists non-secret configuration only. It does not accept credential values and does not contact a provider during page render or save.
+- Endpoint overrides are intentionally limited in this form to HTTP loopback hostnames with an explicit port, without URL credentials, query, or fragment. Hosted providers should be selected through known presets rather than arbitrary endpoints.
+- The settings save writes an audit event with provider identity and a boolean configuration marker; it does not include API keys.
+- Updated `docs/model-providers.md` and `README.md`; added `tests/unit/test_model_settings_policy.py`.
+
+Limitations and verification:
+- This is a narrow settings slice, not the complete Model Manager. It does not yet perform a live “test connection”, list remote/local models, stream output, cancel requests, retry, fail over, or route assistant tasks into the inference adapter.
+- The new policy tests currently exercise URL policy expectations and preset shape, not the authenticated end-to-end settings POST. Extend them with a real test client and isolated database before considering the slice release-ready.
+- Tests have not been executed in this environment; do not claim they pass. Check CI and run `pytest -q` in the repository's supported Python environment.
+- The broader project remains a development build. Do not expose it on a LAN or the public internet until authentication, CSRF, route authorization, and security tests have been reviewed end-to-end.
