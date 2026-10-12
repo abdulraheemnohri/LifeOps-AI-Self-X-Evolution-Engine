@@ -869,7 +869,7 @@ def page_settings(flash: str = None, error: str = None):
     with _DB() as db:
         svc = SettingsService(db)
         allset = svc.get_all()
-        profiles = [{"id": k, "name": v["name"], "description": v["description"]}
+        profiles = [{"id": k, "name": k, "description": v["description"]}
                     for k, v in AUTONOMY_PROFILES.items()]
     return render_settings_page(allset, profiles, flash=flash, error=error)
 
