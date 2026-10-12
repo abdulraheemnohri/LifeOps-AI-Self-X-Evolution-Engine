@@ -2,7 +2,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session as DBSession
 
 from lifeops.api.deps import get_db, require_not_stopped
@@ -186,11 +186,12 @@ def list_tools(db: DBSession = Depends(get_db)):
 
 
 @router.post("/tools/execute")
-def execute_tool(payload: dict, db: DBSession = Depends(get_db)):
+def execute_tool(request: Request, payload: dict, db: DBSession = Depends(get_db)):
     tool_name = payload.get("tool", "")
     args = payload.get("args", {}) or {}
     run_id = payload.get("agent_run_id") or f"adhoc_{uuid.uuid4().hex[:8]}"
-    result = _registry(db).execute_tool(tool_name, args, agent_run_id=run_id, db=db)
+    registry = getattr(request.app.state, "tool_registry", None) or _registry(db)
+    result = registry.execute_tool(tool_name, args, agent_run_id=run_id, db=db)
     log_audit_event(db, actor="agent", action="tool.execute", target=tool_name,
                     outcome=result.get("status", "unknown"))
     return result
