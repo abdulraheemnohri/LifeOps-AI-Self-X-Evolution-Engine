@@ -1,13 +1,1 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.db
-*.log
-.sesskey
-data/
-logs/
-workspace/
-venv/
-.pytest_cache/
-src/*.egg-info/
+*.tmp
