@@ -20,6 +20,7 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Any]] = {
     "assistant": {"response_style": "concise", "confirm_before_executing": True, "auto_plan_tasks": True,
                    "max_output_tokens": 2048},
     "model": {"runtime": "litert", "model_path": "", "context_length": 4096,
+               "ollama_base_url": "http://127.0.0.1:11434",
                "generation_params": {"temperature": 0.7, "top_p": 0.95, "max_tokens": 2048, "seed": None}},
     "memory": {"enabled_categories": ["preferences", "facts", "procedures"], "retrieval_limit": 20,
                 "retention_days": 365, "auto_index": True, "export_enabled": True},
@@ -107,6 +108,9 @@ class SettingsService:
             v = updates["context_length"]
             if not isinstance(v, int) or not (256 <= v <= 1_000_000):
                 return False, "context_length must be an integer between 256 and 1000000"
+        if section == "model" and "runtime" in updates:
+            if updates["runtime"] not in ("mock", "litert", "ollama"):
+                return False, "model.runtime must be one of: mock, litert, ollama"
         return True, None
 
     def update(self, section: str, updates: Dict[str, Any], actor: str = "user",

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session as DBSession
 from lifeops.api.deps import get_db, require_not_stopped
 from lifeops.api.helpers import paged, raise_lookup, raise_value
 from lifeops.core.orchestrator import AgentOrchestrator
-from lifeops.models.adapters import LiteRTLMAdapter, MockModelAdapter
+from lifeops.models.adapters import LiteRTLMAdapter, MockModelAdapter, OllamaAdapter
 from lifeops.security.policy import ApprovalGate, PolicyEngine, log_audit_event
 from lifeops.services import crud
 from lifeops.services.settings_service import SettingsService
@@ -27,6 +27,12 @@ def _get_adapter(settings: dict):
     model_cfg = settings.get("model", {})
     runtime = model_cfg.get("runtime", "mock")
     model_path = model_cfg.get("model_path") or None
+    if runtime == "ollama":
+        return OllamaAdapter(
+            model_name=model_path or "llama3.2",
+            base_url=model_cfg.get("ollama_base_url") or None,
+            generation_params=model_cfg.get("generation_params"),
+        )
     if runtime == "litert" and model_path:
         return LiteRTLMAdapter(model_path=model_path)
     if runtime == "litert":
@@ -216,23 +222,39 @@ def model_runtime(db: DBSession = Depends(get_db)):
     settings = SettingsService(db).get_all()
     model_cfg = settings.get("model", {})
     binary = shutil.which("litert-lm")
+    ollama_url = model_cfg.get("ollama_base_url") or OllamaAdapter.DEFAULT_BASE_URL
+    ollama_reachable = OllamaAdapter(base_url=ollama_url).is_available()
     available_runtimes = ["mock"]
     if binary:
         available_runtimes.append("litert")
+    if ollama_reachable:
+        available_runtimes.append("ollama")
     return {"configured_runtime": model_cfg.get("runtime"),
             "litert_binary_found": bool(binary),
             "litert_binary_path": binary,
+            "ollama_base_url": ollama_url,
+            "ollama_reachable": ollama_reachable,
             "available_runtimes": available_runtimes,
             "model_path": model_cfg.get("model_path"),
             "generation_params": model_cfg.get("generation_params"),
-            "note": "Set model.runtime='litert' and provide model.model_path to use a local model."}
+            "note": ("Set model.runtime to 'mock', 'litert' (needs litert-lm binary + model_path) "
+                     "or 'ollama' (needs a running Ollama server; model_path = model name).")}
 
 
 @router.post("/models/test")
 def test_model(payload: dict, db: DBSession = Depends(get_db)):
     prompt = payload.get("prompt", "ping")
     adapter = _get_adapter(SettingsService(db).get_all())
-    return {"runtime": type(adapter).__name__, "response": adapter.generate(prompt)}
+    try:
+        response = adapter.generate(prompt)
+        error = None
+    except Exception as exc:
+        response = None
+        error = str(exc)
+    return {"runtime": type(adapter).__name__,
+            "available": adapter.is_available(),
+            "response": response,
+            "error": error}
 
 
 # ---------------------------------------------------------------------------
