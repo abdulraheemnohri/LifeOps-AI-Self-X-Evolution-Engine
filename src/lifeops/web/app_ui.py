@@ -83,11 +83,17 @@ def _redirect(url, flash=None, error=None):
 
 
 def _model_adapter(settings: dict):
-    """Pick adapter from model.default settings; LiteRT when configured."""
-    from lifeops.models.adapters import MockModelAdapter, LiteRTLMAdapter
-    name = (settings.get("model.default", {}) or {}).get("model_name") or ""
-    if name:
-        return LiteRTLMAdapter(model_path=name)
+    """Pick adapter from the 'model' settings section (mock / litert / ollama)."""
+    from lifeops.models.adapters import MockModelAdapter, LiteRTLMAdapter, OllamaAdapter
+    model_cfg = settings.get("model", {}) or {}
+    runtime = model_cfg.get("runtime", "mock")
+    model_path = model_cfg.get("model_path") or None
+    if runtime == "ollama":
+        return OllamaAdapter(model_name=model_path or "llama3.2",
+                             base_url=model_cfg.get("ollama_base_url") or None,
+                             generation_params=model_cfg.get("generation_params"))
+    if runtime == "litert":
+        return LiteRTLMAdapter(model_path=model_path) if model_path else LiteRTLMAdapter()
     return MockModelAdapter()
 
 
@@ -540,11 +546,24 @@ def page_models(test_result: str = "", flash: str = None):
         settings = SettingsService(db).get_all()
         import shutil
         binary = shutil.which("litert-lm") or "not found"
+        model_cfg = settings.get("model", {}) or {}
         try:
-            adapter_name = type(_model_adapter(settings)).__name__
+            adapter = _model_adapter(settings)
+            adapter_name = type(adapter).__name__
+            available = adapter.is_available()
         except Exception:
-            adapter_name = "MockModelAdapter"
-        runtime = {"litert_lm_binary": binary, "models": [], "adapter": adapter_name}
+            adapter_name, available = "MockModelAdapter", True
+        from lifeops.models.adapters import OllamaAdapter
+        ollama_url = model_cfg.get("ollama_base_url") or OllamaAdapter.DEFAULT_BASE_URL
+        try:
+            ollama_models = OllamaAdapter(base_url=ollama_url).list_models()
+        except Exception:
+            ollama_models = []
+        runtime = {"litert_lm_binary": binary, "models": ollama_models,
+                   "adapter": adapter_name, "adapter_available": available,
+                   "configured_runtime": model_cfg.get("runtime", "mock"),
+                   "model_path": model_cfg.get("model_path", ""),
+                   "ollama_base_url": ollama_url}
     return render_models_page(runtime, test_result=test_result or None, flash=flash)
 
 
@@ -561,12 +580,17 @@ def post_model_test(prompt: str):
 
 
 @app.post("/models/settings")
-def post_model_settings(section: str = "model.default", model_name: str = "",
-                        context_length: str = "", temperature: str = ""):
+def post_model_settings(section: str = "model", runtime: str = "", model_path: str = "",
+                        context_length: str = "", temperature: str = "",
+                        ollama_base_url: str = ""):
     with _DB() as db:
         updates = {}
-        if model_name:
-            updates["model_name"] = model_name
+        if runtime:
+            updates["runtime"] = runtime
+        if model_path:
+            updates["model_path"] = model_path
+        if ollama_base_url:
+            updates["ollama_base_url"] = ollama_base_url
         if context_length:
             try:
                 updates["context_length"] = int(context_length)
@@ -574,7 +598,9 @@ def post_model_settings(section: str = "model.default", model_name: str = "",
                 return _redirect("/models", error="context_length must be an integer.")
         if temperature:
             try:
-                updates["temperature"] = float(temperature)
+                gp = dict((SettingsService(db).get_section("model").get("generation_params") or {}))
+                gp["temperature"] = float(temperature)
+                updates["generation_params"] = gp
             except ValueError:
                 return _redirect("/models", error="temperature must be a number.")
         ok, err = SettingsService(db).update(section, updates, actor="web-ui")

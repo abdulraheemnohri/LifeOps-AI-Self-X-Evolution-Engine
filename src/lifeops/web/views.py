@@ -380,11 +380,16 @@ def render_tools_page(tools=None, integrations=None, policy=None, flash=None, er
 
 def render_models_page(runtime=None, models=None, test_result=None, flash=None):
     rt = runtime or {}
+    configured = str(rt.get("configured_runtime", "mock"))
     body = Div(
         Div(H3("Runtime Detection"),
-            P("LiteRT-LM binary: ", code(str(rt.get("litert_lm_binary", "not found"))), Br(),
-              "Detected models: ", code(", ".join(rt.get("models", [])) or "none"), Br(),
-              "Adapter in use: ", code(str(rt.get("adapter", "mock")))), cls="card"),
+            P("Configured runtime: ", code(configured), Br(),
+              "LiteRT-LM binary: ", code(str(rt.get("litert_lm_binary", "not found"))), Br(),
+              "Ollama endpoint: ", code(str(rt.get("ollama_base_url", ""))), Br(),
+              "Detected Ollama models: ", code(", ".join(rt.get("models", [])) or "none"), Br(),
+              "Adapter in use: ", code(str(rt.get("adapter", "MockModelAdapter"))),
+              " (", "available" if rt.get("adapter_available", True) else "NOT reachable", ")"),
+            cls="card"),
         Div(H3("Test Prompt"),
             Form(Input(type="text", name="prompt", placeholder="Say hello...", required=True),
                  Button("Run", cls="btn", type="submit"),
@@ -392,13 +397,19 @@ def render_models_page(runtime=None, models=None, test_result=None, flash=None):
             (Pre(str(test_result), style="white-space:pre-wrap") if test_result else ""),
             cls="card"),
         Div(H3("Model Settings"),
-            Form(Input(type="hidden", name="section", value="model.default"),
-                 Input(type="text", name="model_name", placeholder="model.gguf name"),
+            Form(Select(Option("mock", value="mock"), Option("litert", value="litert"),
+                        Option("ollama", value="ollama"), name="runtime",
+                        selected=configured),
+                 Input(type="text", name="model_path",
+                       placeholder="litert: path to .litertlm/.gguf model — ollama: model name (e.g. llama3.2)"),
+                 Input(type="text", name="ollama_base_url",
+                       placeholder="http://127.0.0.1:11434"),
                  Input(type="number", name="context_length", placeholder="4096"),
                  Input(type="number", name="temperature", step="0.1", placeholder="0.7"),
                  Button("Save", cls="btn", type="submit"),
                  action="/models/settings", method="post", cls="inline-form"),
-            P("Stored under settings section model.default.", cls="muted"), cls="card"),
+            P("Stored under settings section 'model'. Runtime must be mock, litert or ollama.",
+              cls="muted"), cls="card"),
     )
     return page_layout("Model Manager", "models", body, flash=flash)
 
