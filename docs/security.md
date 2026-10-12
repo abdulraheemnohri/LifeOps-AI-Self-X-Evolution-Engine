@@ -2,7 +2,7 @@
 
 ## Current release posture
 
-This branch remains a local development build. Keep the listener on `127.0.0.1`. Do not expose it to a LAN, reverse proxy, public internet, or shared machine. The current application does not yet provide a complete authentication/session system, CSRF protection, or comprehensive authorization.
+This branch remains a local development build. Keep the listener on `127.0.0.1`; do not expose it to a LAN, reverse proxy, public internet, or shared machine. The browser app now has first-run administrator setup, password hashing, opaque session cookies, and origin/token checks for mutating requests. These are not a substitute for end-to-end security review, rate limiting, authorization tests, or a production deployment review. The separate API app also has its own auth configuration path, so do not assume browser authentication automatically secures every API deployment.
 
 ## Non-negotiable rules
 
@@ -17,7 +17,7 @@ This branch remains a local development build. Keep the listener on `127.0.0.1`.
 
 ## Remote access
 
-The legacy `LIFEOPS_ALLOW_REMOTE` environment flag is not an adequate security boundary. Remote binding must remain unsupported until authenticated sessions, CSRF protections, request authorization, secure cookie settings, rate limits, and security tests are implemented and reviewed.
+The legacy `LIFEOPS_ALLOW_REMOTE` environment flag is not an adequate security boundary. Remote binding must remain unsupported until authenticated sessions, CSRF protections, request authorization, secure cookie settings, rate limits, and security tests are implemented and reviewed. Agent tools must run only within a workspace boundary; terminal execution must never use a shell and must remain approval-gated.
 
 ## Incident handling
 
