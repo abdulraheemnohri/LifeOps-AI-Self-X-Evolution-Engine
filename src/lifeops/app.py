@@ -9,14 +9,14 @@ from starlette.responses import HTMLResponse, RedirectResponse, JSONResponse, Pl
 from starlette.routing import Route
 from . import __version__
 from .database import init_db, get_session_factory, Task, AuditEvent
-from .services import create_task, list_tasks, complete_task, create_note, list_notes, ValidationError
+from .services import create_task, list_tasks, complete_task, create_note, list_notes, create_project, list_projects, create_memory, search_memories, create_approval, list_approvals, decide_approval, create_agent_run, ValidationError
 
 @asynccontextmanager
 async def lifespan(app):
     init_db(); yield
 
 def page(title: str, body: str) -> HTMLResponse:
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(title)} · LifeOps</title><link rel="stylesheet" href="/static/app.css"></head><body><aside class="sidebar"><a class="brand" href="/">◈ LifeOps <span>SELF-X</span></a><nav><a href="/">Overview</a><a href="/tasks">Tasks</a><a href="/notes">Notes & Knowledge</a><a href="/selfx">Self-X Diagnostics</a><a href="/settings">Settings</a></nav><div class="local-tag">● Local-first workspace</div></aside><main><header><div><p class="eyebrow">PERSONAL OPERATING SYSTEM</p><h1>{escape(title)}</h1></div><span class="pill">v{__version__}</span></header>{body}<footer>LifeOps AI + Self-X · Your data stays on this machine by default.</footer></main></body></html>'''
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(title)} · LifeOps</title><link rel="stylesheet" href="/static/app.css"></head><body><aside class="sidebar"><a class="brand" href="/">◈ LifeOps <span>SELF-X</span></a><nav><a href="/">Overview</a><a href="/tasks">Tasks</a><a href="/notes">Notes & Knowledge</a><a href="/projects">Projects</a><a href="/memory">Memory Explorer</a><a href="/approvals">Approvals</a><a href="/selfx">Self-X Diagnostics</a><a href="/settings">Settings</a></nav><div class="local-tag">● Local-first workspace</div></aside><main><header><div><p class="eyebrow">PERSONAL OPERATING SYSTEM</p><h1>{escape(title)}</h1></div><span class="pill">v{__version__}</span></header>{body}<footer>LifeOps AI + Self-X · Your data stays on this machine by default.</footer></main></body></html>'''
     return HTMLResponse(html)
 
 def db_session(): return get_session_factory()()
@@ -75,6 +75,71 @@ async def settings_page(request):
     body='''<section class="panel"><p class="eyebrow">CONFIGURATION</p><h2>Local-first defaults</h2><div class="capability"><span>Network binding</span><b>127.0.0.1 (loopback)</b></div><div class="capability"><span>Storage</span><b>SQLite · data/lifeops.db</b></div><div class="capability"><span>Model runtime</span><b class="muted">Not configured</b></div><div class="capability"><span>Telemetry</span><b>Disabled</b></div><p class="hint">Advanced settings and authentication controls are not yet available. Do not expose this development build to an untrusted network.</p></section>'''
     return page("Settings",body)
 
+
+async def projects_page(request):
+    with db_session() as db: projects=list_projects(db)
+    cards=''.join(f'<article class="note"><h3>{escape(p.name)}</h3><p>{escape(p.description)}</p><small>{escape(p.status)}</small><p><a href="/tasks">Manage tasks →</a></p></article>' for p in projects) or '<div class="empty">No projects yet. Create one to organize your work.</div>'
+    body=f'<section class="panel"><h2>Create project</h2><form class="task-form" method="post" action="/projects"><label>Name<input name="name" required maxlength="160"></label><label>Description<textarea name="description" maxlength="5000" rows="3"></textarea></label><button class="button" type="submit">Create project</button></form></section><section class="notes-grid">{cards}</section>'
+    return page("Projects",body)
+
+async def create_project_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: create_project(db,str(form.get("name","")),str(form.get("description","")))
+    except ValidationError as exc: return page("Projects",f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/projects">Back</a></section>')
+    return RedirectResponse("/projects",status_code=303)
+
+async def memory_page(request):
+    query=str(request.query_params.get("q",""))[:200]
+    with db_session() as db: memories=search_memories(db,query)
+    cards=''.join(f'<article class="note"><span class="priority medium">{escape(m.category)}</span><p>{escape(m.content)}</p><small>Source: {escape(m.source)} · confidence {m.confidence:.2f}</small><form method="post" action="/memory/{m.id}/delete"><button class="icon-button" type="submit">Delete</button></form></article>' for m in memories) or '<div class="empty">No memories match your search.</div>'
+    body=f'<section class="panel"><h2>Store a memory</h2><form class="task-form" method="post" action="/memory"><label>Memory<textarea name="content" required maxlength="10000" rows="3"></textarea></label><label>Category<select name="category"><option>general</option><option>preference</option><option>project</option><option>procedure</option><option>lesson</option><option>research</option></select></label><button class="button" type="submit">Save memory</button></form><form method="get" action="/memory" class="task-form"><label>Search memories<input name="q" maxlength="200" value="{escape(query)}"></label><button class="button" type="submit">Search</button></form></section><section class="notes-grid">{cards}</section>'
+    return page("Memory Explorer",body)
+
+async def create_memory_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: create_memory(db,str(form.get("content","")),str(form.get("category","general")))
+    except ValidationError as exc: return page("Memory Explorer",f'<section class="panel"><p class="error">{escape(str(exc))}</p><a href="/memory">Back</a></section>')
+    return RedirectResponse("/memory",status_code=303)
+
+async def delete_memory_route(request):
+    from .services import delete_memory
+    try:
+        with db_session() as db: delete_memory(db,int(request.path_params["memory_id"]))
+    except (ValueError,LookupError): return PlainTextResponse("Memory not found",status_code=404)
+    return RedirectResponse("/memory",status_code=303)
+
+async def approvals_page(request):
+    with db_session() as db: items=list_approvals(db)
+    cards=''.join(f'<article class="note"><span class="priority high">{escape(a.risk)}</span><h3>{escape(a.action)}</h3><p>{escape(a.summary)}</p><small>Pending human decision</small><div class="approval-actions"><form method="post" action="/approvals/{a.id}/decision"><input type="hidden" name="decision" value="approve"><button class="button" type="submit">Approve record</button></form><form method="post" action="/approvals/{a.id}/decision"><input type="hidden" name="decision" value="reject"><button class="icon-button" type="submit">Reject</button></form></div></article>' for a in items) or '<div class="empty">No pending approvals.</div>'
+    body=f'<section class="panel"><p class="hint">Approval records do not execute actions. A separate policy-checked executor must verify an approved action before performing it.</p></section><section class="notes-grid">{cards}</section>'
+    return page("Security & Approvals",body)
+
+async def approval_decision_route(request):
+    form=await request.form()
+    try:
+        with db_session() as db: decide_approval(db,int(request.path_params["approval_id"]),approve=form.get("decision")=="approve",actor="local-user",reason="Decision submitted through local UI")
+    except (ValueError,LookupError,ValidationError) as exc: return PlainTextResponse(str(exc),status_code=409)
+    return RedirectResponse("/approvals",status_code=303)
+
+async def api_tasks(request):
+    if request.method == "GET":
+        with db_session() as db: rows=list_tasks(db)
+        return JSONResponse({"items":[{"id":t.id,"title":t.title,"description":t.description,"priority":t.priority,"status":t.status,"project_id":t.project_id} for t in rows]})
+    data=await request.json()
+    try:
+        with db_session() as db: t=create_task(db,str(data.get("title","")),str(data.get("description","")),str(data.get("priority","medium")))
+        return JSONResponse({"id":t.id,"title":t.title,"status":t.status},status_code=201)
+    except ValidationError as exc: return JSONResponse({"error":str(exc)},status_code=422)
+
+async def api_agent_runs(request):
+    data=await request.json()
+    try:
+        with db_session() as db: run=create_agent_run(db,str(data.get("request","")))
+        return JSONResponse({"id":run.id,"status":run.status,"message":run.error},status_code=202)
+    except ValidationError as exc: return JSONResponse({"error":str(exc)},status_code=422)
+
 async def health(request):
     try:
         init_db()
@@ -88,7 +153,7 @@ async def stylesheet(request):
     if not css.exists(): return PlainTextResponse("Stylesheet missing",status_code=404)
     return PlainTextResponse(css.read_text(encoding="utf-8"),media_type="text/css")
 
-routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/selfx",selfx_page),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
+routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
 if __name__=="__main__":
     host=os.getenv("LIFEOPS_HOST","127.0.0.1")
