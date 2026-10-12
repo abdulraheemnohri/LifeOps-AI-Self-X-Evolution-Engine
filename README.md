@@ -64,3 +64,7 @@ Donations are optional and must never gate core functionality. This application 
 ## License
 
 MIT.
+
+## Model providers
+
+Open **Settings** after local setup to persist a model provider, model identifier, optional local loopback endpoint, and request timeout. Provider presets are configuration only: saving them does not test connectivity or claim the model is installed. See [model provider configuration](docs/model-providers.md) for local runtimes, optional hosted endpoints, environment-variable credential names, and privacy considerations. Hosted providers can transmit prompts off-device; local inference remains the recommended default for private data.
