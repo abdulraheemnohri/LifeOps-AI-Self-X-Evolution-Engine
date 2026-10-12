@@ -93,6 +93,21 @@ def _make_engine(db):
     return WorkflowEngine(db)
 
 
+@router.post("/workflows/{workflow_id}/run")
+def run_workflow(workflow_id: str, payload: dict = None, request: Request = None,
+                 db: DBSession = Depends(get_db)):
+    payload = payload or {}
+    test_run = bool(payload.get("test_run", False))
+    sample_data = payload.get("sample_data") or {}
+    try:
+        run = _engine(db, request).run(workflow_id, sample_data=sample_data, test_run=test_run)
+    except LookupError as exc:
+        raise_lookup(exc)
+    except ValueError as exc:
+        raise_value(exc)
+    return crud.to_dict(run)
+
+
 @router.post("/workflows/{workflow_id}/{action}")
 def workflow_lifecycle(workflow_id: str, action: str, db: DBSession = Depends(get_db)):
     mapping = {"pause": "paused", "resume": "active", "disable": "disabled"}
@@ -129,21 +144,6 @@ def preview_plan(workflow_id: str, db: DBSession = Depends(get_db)):
         return _make_engine(db).preview_plan(workflow_id)
     except LookupError as exc:
         raise_lookup(exc)
-
-
-@router.post("/workflows/{workflow_id}/run")
-def run_workflow(workflow_id: str, payload: dict = None, request: Request = None,
-                 db: DBSession = Depends(get_db)):
-    payload = payload or {}
-    test_run = bool(payload.get("test_run", False))
-    sample_data = payload.get("sample_data") or {}
-    try:
-        run = _engine(db, request).run(workflow_id, sample_data=sample_data, test_run=test_run)
-    except LookupError as exc:
-        raise_lookup(exc)
-    except ValueError as exc:
-        raise_value(exc)
-    return crud.to_dict(run)
 
 
 @router.get("/workflows/{workflow_id}/runs")

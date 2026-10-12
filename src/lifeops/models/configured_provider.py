@@ -43,6 +43,8 @@ def read_model_settings(db: Session) -> dict[str, Any]:
 
 def is_safe_endpoint_override(endpoint: str) -> bool:
     """Allow explicit HTTP loopback endpoints only (SSRF protection)."""
+    if any(c in endpoint for c in ("\r", "\n", "\t", " ")):
+        return False
     from urllib.parse import urlsplit
 
     try:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
-from .database import Task, Note, Memory, Project, Approval, AgentRun, SelfGoal, Evaluation, ImprovementProposal, AuditEvent
+from lifeops.database import Task, Note, Memory, Project, Approval, AgentRun, SelfGoal, Evaluation, ImprovementProposal, AuditEvent
 VALID_PRIORITIES = {"low", "medium", "high"}
 class ValidationError(ValueError): pass
 

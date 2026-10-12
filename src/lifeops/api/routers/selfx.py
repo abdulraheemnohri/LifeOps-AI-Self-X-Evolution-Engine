@@ -156,10 +156,10 @@ def publish_skill(skill_id: str, payload: dict, db: DBSession = Depends(get_db))
     settings = SettingsService(db).get_section("skills")
     tests_required = settings.get("tests_required_for_publish", True)
     if tests_required:
-        failing = db.query(SkillTest).filter(SkillTest.skill_id == skill_id,
-                                             SkillTest.last_passed != True).all()  # noqa: E712
-        if failing:
-            raise_value(ValueError("cannot publish: skill has untested or failing tests"))
+        all_tests = db.query(SkillTest).filter(SkillTest.skill_id == skill_id).all()
+        failing = [t for t in all_tests if not t.last_passed]
+        if not all_tests or failing:
+            raise HTTPException(status_code=409, detail="cannot publish: skill has missing or failing tests")
     if not SelfSkills(db).publish_skill_version(skill_id, version):
         raise_lookup(LookupError("skill not found"))
     log_audit_event(db, actor="user", action="skill.publish",

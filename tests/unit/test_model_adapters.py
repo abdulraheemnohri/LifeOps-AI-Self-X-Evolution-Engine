@@ -84,8 +84,8 @@ def test_litert_falls_back_without_binary():
 
 
 def test_litert_available_when_binary_present(tmp_path):
-    # /bin/sh always exists on POSIX; shutil.which resolves absolute path too
-    adapter = LiteRTLMAdapter(binary_path="/bin/sh")
+    import sys
+    adapter = LiteRTLMAdapter(binary_path=sys.executable)
     assert adapter.is_available() is True
 
 
@@ -157,7 +157,8 @@ def test_settings_validate_rejects_unknown_runtime():
 
 
 # ------------------------------------------------------------------ e2e via API
-def test_models_runtime_and_test_endpoints_with_fake_ollama(client, fake_ollama):
+def test_models_runtime_and_test_endpoints_with_fake_ollama(auth_client, fake_ollama):
+    client = auth_client
     # Point settings at the fake server and select ollama runtime
     r = client.put("/api/v1/settings/model", json={"updates": {
         "runtime": "ollama", "model_path": "llama3.2", "ollama_base_url": fake_ollama}})

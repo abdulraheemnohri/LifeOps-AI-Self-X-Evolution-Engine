@@ -8,10 +8,10 @@ import uvicorn
 from starlette.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from . import __version__
-from .database import init_db, get_session_factory, Task, AuditEvent
+from .database import init_db, get_session_factory
+from .storage.models import Task, AuditEvent
 from .services import create_task, list_tasks, complete_task, create_note, list_notes, create_project, list_projects, create_memory, search_memories, create_approval, list_approvals, decide_approval, create_agent_run, create_self_goal, create_improvement_proposal, decide_improvement_proposal, ValidationError
 
-@asynccontextmanager
 async def lifespan(app):
     engine = init_db()
     from .storage.models import Base as StorageBase
@@ -70,21 +70,21 @@ async def create_note_route(request):
     return RedirectResponse("/notes",status_code=303)
 
 async def selfx_page(request):
-    from .database import SelfGoal, Evaluation, ImprovementProposal
+    from .storage.models import SelfXGoal, Evaluation, ImprovementProposal
     with db_session() as db:
         task_count=len(list_tasks(db)); note_count=len(list_notes(db)); audit_count=db.query(AuditEvent).count()
-        goals=db.query(SelfGoal).order_by(SelfGoal.id.desc()).limit(20).all()
+        goals=db.query(SelfXGoal).order_by(SelfXGoal.id.desc()).limit(20).all()
         evaluations=db.query(Evaluation).order_by(Evaluation.id.desc()).limit(20).all()
         proposals=db.query(ImprovementProposal).order_by(ImprovementProposal.id.desc()).limit(20).all()
-    goal_cards=''.join(f'<article class="note"><h3>{escape(g.title)}</h3><p>{escape(g.objective)}</p><small>Status: {escape(g.status)} · Baseline: {escape(g.baseline or "not set")} · Target: {escape(g.target or "not set")}</small></article>' for g in goals) or '<div class="empty">No improvement goals recorded.</div>'
-    evaluation_cards=''.join(f'<article class="note"><h3>{escape(e.name)}</h3><p>Suite {escape(e.suite_version)} · Score: {("not scored" if e.score is None else format(e.score, ".3f"))}</p><small>{escape(e.details[:500])}</small></article>' for e in evaluations) or '<div class="empty">No evaluation records yet.</div>'
+    goal_cards=''.join(f'<article class="note"><h3>Goal {escape(str(g.id))}</h3><p>{escape(g.objective)}</p><small>Status: {escape(g.status)}</small></article>' for g in goals) or '<div class="empty">No improvement goals recorded.</div>'
+    evaluation_cards=''.join(f'<article class="note"><h3>{escape(e.suite_name)}</h3><p>Score: {format(e.score, ".3f") if e.score is not None else "not scored"}</p></article>' for e in evaluations) or '<div class="empty">No evaluation records yet.</div>'
     proposal_cards=[]
     for p in proposals:
-        card=f'<article class="note"><span class="priority {escape(p.risk if p.risk in {"low","medium","high"} else "high")}">{escape(p.risk)}</span><h3>{escape(p.title)}</h3><p>{escape(p.problem)}</p><small>Status: {escape(p.status)}</small>'
+        card=f'<article class="note"><span class="priority {escape(p.risk_level if p.risk_level in {"low","medium","high"} else "high")}">{escape(p.risk_level)}</span><p>{escape(p.problem)}</p><small>Status: {escape(p.status)}</small>'
         if p.status == "proposed": card += f'<div class="approval-actions"><form method="post" action="/selfx/proposals/{p.id}/decision"><input type="hidden" name="decision" value="approve"><button class="button">Approve trial</button></form><form method="post" action="/selfx/proposals/{p.id}/decision"><input type="hidden" name="decision" value="reject"><button class="icon-button">Reject</button></form></div>'
         proposal_cards.append(card+'</article>')
     proposal_html=''.join(proposal_cards) or '<div class="empty">No improvement proposals recorded.</div>'
-    body=f'''<section class="hero compact"><div><p class="eyebrow">SELF-X CONTROL CENTER</p><h2>Observe first. Improve safely.</h2><p>Record measurable goals, evaluation evidence, and reviewable proposals.</p></div><div class="orb">✳</div></section><section class="stats"><article class="stat"><span>Database</span><strong class="healthy">Connected</strong><small>SQLite session succeeded</small></article><article class="stat"><span>Tasks</span><strong>{task_count}</strong><small>Persistent records</small></article><article class="stat"><span>Notes</span><strong>{note_count}</strong><small>Persistent records</small></article><article class="stat"><span>Audit events</span><strong>{audit_count}</strong><small>Service actions recorded</small></article></section><section class="panel"><h2>Improvement goal</h2><form class="task-form" method="post" action="/selfx/goals"><label>Title<input name="title" maxlength="240" required></label><label>Objective<textarea name="objective" maxlength="5000" required></textarea></label><label>Baseline<input name="baseline" maxlength="5000"></label><label>Target<input name="target" maxlength="5000"></label><button class="button">Save goal</button></form></section><section class="notes-grid">{goal_cards}</section><section class="panel"><h2>Improvement proposal</h2><form class="task-form" method="post" action="/selfx/proposals"><label>Title<input name="title" maxlength="240" required></label><label>Problem<textarea name="problem" maxlength="10000" required></textarea></label><label>Evidence<textarea name="evidence" maxlength="10000"></textarea></label><label>Expected benefit<textarea name="expected_benefit" maxlength="10000"></textarea></label><label>Risk<select name="risk"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select></label><label>Rollback plan<textarea name="rollback_plan" maxlength="10000" required></textarea></label><button class="button">Submit proposal</button></form></section><section class="notes-grid">{proposal_html}</section><section class="panel"><h2>Evaluation history</h2>{evaluation_cards}<p class="hint">This page records evidence; it does not run repairs or deploy code. Approval permits only a separately sandboxed trial.</p></section>'''
+    body=f'''<section class="hero compact"><div><p class="eyebrow">SELF-X CONTROL CENTER</p><h2>Observe first. Improve safely.</h2><p>Record measurable goals, evaluation evidence, and reviewable proposals.</p></div><div class="orb">✳</div></section><section class="stats"><article class="stat"><span>Database</span><strong class="healthy">Connected</strong><small>SQLite session succeeded</small></article><article class="stat"><span>Tasks</span><strong>{task_count}</strong><small>Persistent records</small></article><article class="stat"><span>Notes</span><strong>{note_count}</strong><small>Persistent records</small></article><article class="stat"><span>Audit events</span><strong>{audit_count}</strong><small>Service actions recorded</small></article></section><section class="panel"><h2>Improvement goal</h2><form class="task-form" method="post" action="/selfx/goals"><label>Objective<textarea name="objective" maxlength="5000" required></textarea></label><button class="button">Save goal</button></form></section><section class="notes-grid">{goal_cards}</section><section class="panel"><h2>Improvement proposal</h2><form class="task-form" method="post" action="/selfx/proposals"><label>Problem<textarea name="problem" maxlength="10000" required></textarea></label><label>Expected benefit<textarea name="expected_benefit" maxlength="10000"></textarea></label><label>Risk<select name="risk"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select></label><button class="button">Submit proposal</button></form></section><section class="notes-grid">{proposal_html}</section><section class="panel"><h2>Evaluation history</h2>{evaluation_cards}<p class="hint">This page records evidence; it does not run repairs or deploy code. Approval permits only a separately sandboxed trial.</p></section>'''
     return page("Self-X Diagnostics",body)
 
 async def create_goal_route(request):
