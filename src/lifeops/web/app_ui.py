@@ -1,10 +1,10 @@
 import os
 from fasthtml.common import FastHTML, serve, RedirectResponse
 from starlette.staticfiles import StaticFiles
-from src.lifeops.storage.database import get_session_factory, get_engine, init_db
-from src.lifeops.lifeops.tasks import TaskService
-from src.lifeops.storage.models import TaskStatus
-from src.lifeops.web.views import render_dashboard, render_tasks_page, render_assistant_page, render_page_generic
+from lifeops.storage.database import get_session_factory, get_engine, init_db
+from lifeops.lifeops.tasks import TaskService
+from lifeops.storage.models import TaskStatus
+from lifeops.web.views import render_dashboard, render_tasks_page, render_assistant_page, render_page_generic
 
 app = FastHTML()
 

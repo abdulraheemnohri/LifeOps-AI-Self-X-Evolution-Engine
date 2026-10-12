@@ -10,3 +10,4 @@ logs/
 workspace/
 venv/
 .pytest_cache/
+src/*.egg-info/

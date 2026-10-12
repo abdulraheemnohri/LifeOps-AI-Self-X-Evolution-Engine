@@ -1,8 +1,8 @@
 import pytest
 import datetime
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.storage.models import TaskStatus
-from src.lifeops.lifeops.tasks import TaskService, DailyPlannerEngine, NotificationService
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.storage.models import TaskStatus
+from lifeops.lifeops.tasks import TaskService, DailyPlannerEngine, NotificationService
 
 def test_task_service_and_daily_planner(tmp_path):
     db_path = tmp_path / "test.db"

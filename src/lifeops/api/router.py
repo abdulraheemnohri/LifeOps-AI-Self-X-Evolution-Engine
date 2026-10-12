@@ -1,96 +1,144 @@
-import asyncio
-from typing import Dict, Any, List
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
-from src.lifeops.storage.database import get_session_factory, get_engine, init_db
-from src.lifeops.storage.models import User, Task, Note, Approval, Memory, Skill, AgentRun, TaskStatus, ApprovalDecision
-from src.lifeops.lifeops.tasks import TaskService, NotificationService
-from src.lifeops.security.policy import PolicyEngine, ApprovalGate
-from src.lifeops.selfx.engine import SelfIdentity, SelfDiagnostics, SelfSkills, SelfMemory
+"""LifeOps FastAPI application: assembles all /api/v1 routers, auth middleware,
+WebSocket real-time events, and startup wiring for scheduler/workers."""
+from typing import Any, Dict, List
 
-app = FastAPI(title="LifeOps AI + Self-X API", version="0.1.0")
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 
-# WebSocket active connections
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
+from lifeops.api.deps import (PUBLIC_API_PATHS, auth_enabled, current_user_from_request,
+                              emergency_stop, get_db)
+from lifeops.api.routers import admin, agents, auth, automation, lifeops_crud, selfx
+from lifeops.storage.database import get_engine, get_session_factory, init_db
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+def create_api_app(start_background: bool = True) -> FastAPI:
+    app = FastAPI(title="LifeOps AI + Self-X API", version="0.1.0")
 
-    async def broadcast(self, message: Dict[str, Any]):
-        for connection in self.active_connections:
+    # ------------------------------------------------------------------
+    # Auth middleware (enforced only when security.auth_enabled is true)
+    # ------------------------------------------------------------------
+    @app.middleware("http")
+    async def auth_middleware(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api/v1") and path not in PUBLIC_API_PATHS:
+            db = next(get_db())
             try:
-                await connection.send_json(message)
-            except Exception:
-                pass
+                if auth_enabled(db):
+                    user = current_user_from_request(request, db)
+                    if user is None:
+                        return JSONResponse(status_code=401,
+                                            content={"detail": "Authentication required"})
+                    request.state.user = user
+            finally:
+                db.close()
+        return await call_next(request)
 
-manager = ConnectionManager()
+    # ------------------------------------------------------------------
+    # Routers
+    # ------------------------------------------------------------------
+    for module in (auth, lifeops_crud, agents, selfx, automation, admin):
+        app.include_router(module.router)
 
-def get_db():
+    # ------------------------------------------------------------------
+    # WebSocket active connections
+    # ------------------------------------------------------------------
+    class ConnectionManager:
+        def __init__(self):
+            self.active_connections: List[WebSocket] = []
+
+        async def connect(self, websocket: WebSocket):
+            await websocket.accept()
+            self.active_connections.append(websocket)
+
+        def disconnect(self, websocket: WebSocket):
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+
+        async def broadcast(self, message: Dict[str, Any]):
+            for connection in self.active_connections:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
+    manager = ConnectionManager()
+    app.state.ws_manager = manager
+
+    @app.websocket("/ws/events")
+    async def websocket_events(websocket: WebSocket):
+        await manager.connect(websocket)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                await websocket.send_json({"type": "echo", "data": data})
+        except WebSocketDisconnect:
+            manager.disconnect(websocket)
+
+    # ------------------------------------------------------------------
+    # Startup: DB, worker queue, scheduler; shutdown: stop threads
+    # ------------------------------------------------------------------
+    @app.on_event("startup")
+    def _startup():
+        engine = get_engine()
+        init_db(engine)
+        session_factory = get_session_factory(engine)
+        from lifeops.tools.registry import ToolRegistry
+        from lifeops.security.policy import PolicyEngine, ApprovalGate
+        db = session_factory()
+        try:
+            app.state.tool_registry = ToolRegistry(PolicyEngine(), ApprovalGate(db))
+        finally:
+            db.close()
+        if start_background:
+            from lifeops.scheduler.worker import Scheduler, WorkerQueue
+            from lifeops.services.settings_service import SettingsService
+            db = session_factory()
+            try:
+                sched_cfg = SettingsService(db).get_section("scheduler")
+            finally:
+                db.close()
+            queue = WorkerQueue(session_factory,
+                                concurrency=int(sched_cfg.get("worker_concurrency", 2)),
+                                queue_limit=int(sched_cfg.get("queue_limit", 100)))
+            queue.start()
+            recovered = queue.recover_pending()
+            scheduler = Scheduler(session_factory, queue)
+            scheduler.start()
+            app.state.worker_queue = queue
+            app.state.scheduler = scheduler
+            app.state.recovered_jobs = recovered
+
+    @app.on_event("shutdown")
+    def _shutdown():
+        for attr in ("scheduler", "worker_queue"):
+            obj = getattr(app.state, attr, None)
+            if obj is not None:
+                try:
+                    obj.stop()
+                except Exception:
+                    pass
+
+    return app
+
+
+# Module-level default app instance. Imported by main.py and tests.
+# Background threads are started lazily via `enable_background_workers()` so
+# that TestClient usage stays deterministic.
+app = create_api_app(start_background=False)
+
+
+def enable_background_workers(target=None):
+    """Start worker queue + scheduler on an app (used by the production entry point)."""
+    target = target or app
     engine = get_engine()
+    init_db(engine)
     session_factory = get_session_factory(engine)
-    db = session_factory()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Health & System
-@app.get("/api/v1/system/health")
-def health_check(db: Session = Depends(get_db)):
-    diag = SelfDiagnostics(db)
-    return diag.run_health_check()
-
-@app.get("/api/v1/system/identity")
-def get_identity():
-    return SelfIdentity.get_system_identity()
-
-# Tasks API
-@app.get("/api/v1/tasks")
-def list_tasks(db: Session = Depends(get_db)):
-    svc = TaskService(db)
-    tasks = svc.list_tasks()
-    return [{"id": t.id, "title": t.title, "priority": t.priority, "status": t.status.value} for t in tasks]
-
-@app.post("/api/v1/tasks")
-def create_task(payload: Dict[str, Any], db: Session = Depends(get_db)):
-    svc = TaskService(db)
-    task = svc.create_task(
-        title=payload.get("title", "Untitled Task"),
-        description=payload.get("description"),
-        priority=payload.get("priority", "medium")
-    )
-    return {"id": task.id, "title": task.title, "status": task.status.value}
-
-# Approvals API
-@app.get("/api/v1/approvals")
-def list_approvals(db: Session = Depends(get_db)):
-    approvals = db.query(Approval).filter_by(decision=ApprovalDecision.PENDING).all()
-    return [{"id": a.id, "action_type": a.action_type, "description": a.description, "payload": a.payload} for a in approvals]
-
-@app.post("/api/v1/approvals/{approval_id}/decision")
-def decide_approval(approval_id: str, payload: Dict[str, Any], db: Session = Depends(get_db)):
-    gate = ApprovalGate(db)
-    decision_str = payload.get("decision", "APPROVED").upper()
-    decision = ApprovalDecision.APPROVED if decision_str == "APPROVED" else ApprovalDecision.REJECTED
-    success = gate.decide(approval_id, decision, payload.get("decided_by", "user"))
-    if not success:
-        raise HTTPException(status_code=404, detail="Approval request not found")
-    return {"status": "success", "approval_id": approval_id, "decision": decision.value}
-
-# Real-time WebSocket
-@app.websocket("/ws/events")
-async def websocket_events(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({"type": "echo", "data": data})
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+    from lifeops.scheduler.worker import Scheduler, WorkerQueue
+    queue = WorkerQueue(session_factory)
+    queue.start()
+    queue.recover_pending()
+    scheduler = Scheduler(session_factory, queue)
+    scheduler.start()
+    target.state.worker_queue = queue
+    target.state.scheduler = scheduler
+    return target

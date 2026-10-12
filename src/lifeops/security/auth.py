@@ -4,7 +4,7 @@ import secrets
 import datetime
 from typing import Optional
 from sqlalchemy.orm import Session as DBSession
-from src.lifeops.storage.models import User, Session
+from lifeops.storage.models import User, Session
 
 def hash_password(password: str, salt: Optional[str] = None) -> str:
     if not salt:

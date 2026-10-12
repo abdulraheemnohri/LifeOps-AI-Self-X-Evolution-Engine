@@ -19,6 +19,6 @@ pip install -e .
 mkdir -p data workspace logs
 
 # Initialize database
-python3 -c "from src.lifeops.storage.database import init_db; init_db()"
+python3 -c "from lifeops.storage.database import init_db; init_db()"
 
 echo "Installation complete!"

@@ -1,5 +1,5 @@
 from fasthtml.common import *
-from src.lifeops.web.layout import page_layout
+from lifeops.web.layout import page_layout
 
 def render_dashboard(data=None):
     return page_layout(

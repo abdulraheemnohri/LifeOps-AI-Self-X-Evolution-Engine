@@ -1,6 +1,6 @@
 import pytest
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.selfx.engine import (
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.selfx.engine import (
     SelfIdentity, SelfDiagnostics, SelfSkills, SelfMemory, SelfRecovery, ImprovementManager
 )
 

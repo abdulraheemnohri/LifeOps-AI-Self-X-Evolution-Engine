@@ -1,7 +1,7 @@
 import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session as DBSession
-from src.lifeops.storage.models import Task, Project, CalendarEvent, Note, Document, TaskStatus, Notification
+from lifeops.storage.models import Task, Project, CalendarEvent, Note, Document, TaskStatus, Notification
 
 class TaskService:
     def __init__(self, db: DBSession):
