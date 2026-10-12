@@ -4,7 +4,7 @@ import uuid
 import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session as DBSession
-from src.lifeops.storage.models import (
+from lifeops.storage.models import (
     Skill, SkillVersion, SkillTest, Memory, MemoryRevision, SelfXGoal, Evaluation,
     ImprovementProposal, Checkpoint
 )

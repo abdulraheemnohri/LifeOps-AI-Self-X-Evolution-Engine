@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.api.router import app, get_db
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.api.router import app, get_db
 
 def test_api_endpoints(tmp_path):
     db_path = tmp_path / "test.db"

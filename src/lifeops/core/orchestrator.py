@@ -2,9 +2,9 @@ import uuid
 import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session as DBSession
-from src.lifeops.storage.models import AgentRun, AgentStep, ToolCall, TaskStatus, Approval, ApprovalDecision
-from src.lifeops.models.adapters import BaseModelAdapter, MockModelAdapter
-from src.lifeops.tools.registry import ToolRegistry
+from lifeops.storage.models import AgentRun, AgentStep, ToolCall, TaskStatus, Approval, ApprovalDecision
+from lifeops.models.adapters import BaseModelAdapter, MockModelAdapter
+from lifeops.tools.registry import ToolRegistry
 
 class AgentOrchestrator:
     def __init__(self, db: DBSession, tool_registry: ToolRegistry, model_adapter: Optional[BaseModelAdapter] = None):

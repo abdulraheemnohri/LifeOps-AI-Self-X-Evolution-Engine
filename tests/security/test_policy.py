@@ -1,8 +1,8 @@
 import pytest
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.storage.models import User, ApprovalDecision, AuditEvent
-from src.lifeops.security.auth import hash_password, verify_password, create_session, validate_session, revoke_session
-from src.lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate, log_audit_event
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.storage.models import User, ApprovalDecision, AuditEvent
+from lifeops.security.auth import hash_password, verify_password, create_session, validate_session, revoke_session
+from lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate, log_audit_event
 
 def test_auth_password_and_session(tmp_path):
     db_path = tmp_path / "test.db"

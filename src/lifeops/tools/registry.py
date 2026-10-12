@@ -1,7 +1,7 @@
 import os
 import subprocess
 from typing import Dict, Any, Callable, Optional
-from src.lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate
+from lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate
 
 class ToolRegistry:
     def __init__(self, policy_engine: PolicyEngine, approval_gate: Optional[ApprovalGate] = None):

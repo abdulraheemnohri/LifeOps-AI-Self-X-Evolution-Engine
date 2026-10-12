@@ -1,8 +1,8 @@
 import sys
 import os
 import platform
-from src.lifeops.storage.database import get_engine, init_db
-from src.lifeops.selfx.engine import SelfIdentity, SelfDiagnostics
+from lifeops.storage.database import get_engine, init_db
+from lifeops.selfx.engine import SelfIdentity, SelfDiagnostics
 
 def run_doctor():
     print("=== LifeOps AI System Doctor ===")
@@ -12,7 +12,7 @@ def run_doctor():
     engine = get_engine()
     init_db(engine)
 
-    from src.lifeops.storage.database import get_session_factory
+    from lifeops.storage.database import get_session_factory
     sf = get_session_factory(engine)
     db = sf()
 

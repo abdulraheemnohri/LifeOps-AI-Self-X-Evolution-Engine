@@ -1,8 +1,8 @@
 import os
 import pytest
 from sqlalchemy import inspect
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.storage.models import Base, User, Task, TaskStatus
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.storage.models import Base, User, Task, TaskStatus
 
 def test_init_db_and_tables(tmp_path):
     db_path = tmp_path / "test.db"

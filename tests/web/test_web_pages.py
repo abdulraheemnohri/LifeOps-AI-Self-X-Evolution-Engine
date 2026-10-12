@@ -1,6 +1,6 @@
 import pytest
 from starlette.testclient import TestClient
-from src.lifeops.web.app_ui import app
+from lifeops.web.app_ui import app
 
 def test_web_pages_routing():
     client = TestClient(app)

@@ -2,11 +2,11 @@ import asyncio
 from typing import Dict, Any, List
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from src.lifeops.storage.database import get_session_factory, get_engine, init_db
-from src.lifeops.storage.models import User, Task, Note, Approval, Memory, Skill, AgentRun, TaskStatus, ApprovalDecision
-from src.lifeops.lifeops.tasks import TaskService, NotificationService
-from src.lifeops.security.policy import PolicyEngine, ApprovalGate
-from src.lifeops.selfx.engine import SelfIdentity, SelfDiagnostics, SelfSkills, SelfMemory
+from lifeops.storage.database import get_session_factory, get_engine, init_db
+from lifeops.storage.models import User, Task, Note, Approval, Memory, Skill, AgentRun, TaskStatus, ApprovalDecision
+from lifeops.lifeops.tasks import TaskService, NotificationService
+from lifeops.security.policy import PolicyEngine, ApprovalGate
+from lifeops.selfx.engine import SelfIdentity, SelfDiagnostics, SelfSkills, SelfMemory
 
 app = FastAPI(title="LifeOps AI + Self-X API", version="0.1.0")
 

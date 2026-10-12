@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from src.lifeops.storage.models import Base
+from lifeops.storage.models import Base
 
 DEFAULT_DB_URL = os.environ.get("DATABASE_URL", "sqlite:///data/lifeops.db")
 

@@ -1,10 +1,10 @@
 import pytest
-from src.lifeops.storage.database import get_engine, init_db, get_session_factory
-from src.lifeops.storage.models import TaskStatus, ApprovalDecision
-from src.lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate
-from src.lifeops.tools.registry import ToolRegistry
-from src.lifeops.models.adapters import MockModelAdapter, LiteRTLMAdapter
-from src.lifeops.core.orchestrator import AgentOrchestrator
+from lifeops.storage.database import get_engine, init_db, get_session_factory
+from lifeops.storage.models import TaskStatus, ApprovalDecision
+from lifeops.security.policy import PolicyEngine, PolicyDecision, ApprovalGate
+from lifeops.tools.registry import ToolRegistry
+from lifeops.models.adapters import MockModelAdapter, LiteRTLMAdapter
+from lifeops.core.orchestrator import AgentOrchestrator
 
 def test_agent_and_tools_flow(tmp_path):
     db_path = tmp_path / "test.db"

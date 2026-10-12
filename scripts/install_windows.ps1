@@ -11,6 +11,6 @@ pip install -e .
 
 New-Item -ItemType Directory -Force -Path "data", "workspace", "logs"
 
-python -c "from src.lifeops.storage.database import init_db; init_db()"
+python -c "from lifeops.storage.database import init_db; init_db()"
 
 Write-Host "Installation complete!"
