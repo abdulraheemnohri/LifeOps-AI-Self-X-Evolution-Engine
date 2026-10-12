@@ -2,6 +2,12 @@
 
 LifeOps uses one OpenAI-compatible adapter for compatible local servers and explicitly configured hosted endpoints. Provider presets are configuration helpers, not a guarantee that a model exists, a server is reachable, or an account has free quota.
 
+## Configure through the Web UI
+
+Open **Settings** after logging in. Choose a known provider, enter the model identifier used by that provider, optionally supply a local loopback endpoint override, choose a bounded timeout, and save. Saving does not initiate a network request. Connection status remains **Not tested** until a separate, explicit health/test action is implemented.
+
+Endpoint overrides in this settings form are intentionally limited to HTTP loopback addresses (`localhost`, `127.0.0.1`, or `::1`) with an explicit port. This prevents the form from becoming an arbitrary outbound URL/SSRF path. To use a hosted preset, select its preset; do not enter hosted endpoints into the local override field.
+
 ## Local endpoints
 
 | Preset | Default endpoint | Notes |
@@ -20,7 +26,7 @@ LifeOps uses one OpenAI-compatible adapter for compatible local servers and expl
 | `gemini` | `GEMINI_API_KEY` | Use a model supported by the provider's compatible API. |
 | `huggingface` | `HF_TOKEN` | Endpoint/model compatibility and quota vary. |
 
-Set credentials in the process environment or a protected secret manager. Never place API keys in browser code, URLs, committed configuration, or screenshots. Do not assume hosted services are free; verify each provider's current terms and quota.
+Credentials must be supplied through process environment or a protected secret manager. Never put API keys in browser forms, HTML, URLs, committed configuration, or logs. Do not assume hosted services are free; verify current terms and quotas.
 
 ## Python usage
 
@@ -32,6 +38,4 @@ text = adapter.generate("Summarize the purpose of LifeOps.")
 print(text)
 ```
 
-`is_available()` reports that adapter configuration is present; it does not probe the endpoint. A successful `generate()` call is the actual inference check. The initial adapter is synchronous, non-streaming, and does not implement automatic failover. Configure one provider explicitly and handle `ProviderError` in the calling service.
-
-Hosted provider requests send prompt content outside the machine. Keep the default local-first policy and do not route private content to hosted providers without user configuration and authorization.
+`is_available()` reports adapter configuration, not endpoint health. A successful `generate()` call is the actual inference check. The initial adapter is synchronous and non-streaming, with no automatic failover. Hosted requests transmit prompt content outside the machine, so use local inference for private content unless you explicitly authorize remote processing.
