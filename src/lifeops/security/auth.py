@@ -64,24 +64,35 @@ def session_expiry(now: float | None = None, ttl_seconds: int = SESSION_TTL_SECO
 def create_session(db: DBSession, user_id: int, duration_hours: int = 12) -> Session:
     if not 1 <= duration_hours <= 24:
         raise ValueError("Session duration must be between 1 and 24 hours.")
-    session_id = secrets.token_urlsafe(32)
+    raw_token = new_session_token()
     expires_at = datetime.datetime.utcnow() + datetime.timedelta(hours=duration_hours)
-    session_obj = Session(id=session_id, user_id=user_id, expires_at=expires_at)
+    session_obj = Session(id=token_digest(raw_token), user_id=user_id, expires_at=expires_at)
     db.add(session_obj)
     db.commit()
     db.refresh(session_obj)
+    # The bearer token is returned only to the caller for the response cookie.
+    # It is never stored in the database.
+    session_obj._raw_token = raw_token
     return session_obj
 
 def validate_session(db: DBSession, session_id: str) -> Optional[User]:
     if not session_id or len(session_id) > 256:
         return None
-    session_obj = db.query(Session).filter_by(id=session_id, revoked=False).first()
+    try:
+        digest = token_digest(session_id)
+    except ValueError:
+        return None
+    session_obj = db.query(Session).filter_by(id=digest, revoked=False).first()
     if not session_obj or session_obj.expires_at < datetime.datetime.utcnow():
         return None
     return db.query(User).filter_by(id=session_obj.user_id).first()
 
 def revoke_session(db: DBSession, session_id: str) -> None:
-    session_obj = db.query(Session).filter_by(id=session_id).first()
+    try:
+        digest = token_digest(session_id)
+    except ValueError:
+        return
+    session_obj = db.query(Session).filter_by(id=digest).first()
     if session_obj and not session_obj.revoked:
         session_obj.revoked = True
         db.commit()

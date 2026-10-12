@@ -13,7 +13,10 @@ from .services import create_task, list_tasks, complete_task, create_note, list_
 
 @asynccontextmanager
 async def lifespan(app):
-    init_db(); yield
+    engine = init_db()
+    from .storage.models import Base as StorageBase
+    StorageBase.metadata.create_all(bind=engine)
+    yield
 
 def page(title: str, body: str) -> HTMLResponse:
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(title)} · LifeOps</title><link rel="stylesheet" href="/static/app.css"></head><body><aside class="sidebar"><a class="brand" href="/">◈ LifeOps <span>SELF-X</span></a><nav><a href="/">Overview</a><a href="/tasks">Tasks</a><a href="/notes">Notes & Knowledge</a><a href="/projects">Projects</a><a href="/memory">Memory Explorer</a><a href="/approvals">Approvals</a><a href="/selfx">Self-X Diagnostics</a><a href="/settings">Settings</a></nav><div class="local-tag">● Local-first workspace</div></aside><main><header><div><p class="eyebrow">PERSONAL OPERATING SYSTEM</p><h1>{escape(title)}</h1></div><span class="pill">v{__version__}</span></header>{body}<footer>LifeOps AI + Self-X · Your data stays on this machine by default.</footer></main></body></html>'''
@@ -225,7 +228,8 @@ def validate_bind_host(host: str) -> str:
 
 
 # Authentication endpoints. Initial setup is available only while no user exists.
-import secrets as _secrets\nimport hmac
+import secrets as _secrets
+import hmac
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -256,7 +260,7 @@ async def setup_submit(request):
         db.add(user); db.commit(); db.refresh(user)
         session_obj=create_session(db,user.id)
     response=RedirectResponse("/",status_code=303)
-    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_session",getattr(session_obj,"_raw_token",session_obj.id),max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
     response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
     return response
 
@@ -275,7 +279,7 @@ async def login_submit(request):
             return page("Sign in",'<section class="panel"><p class="error">Invalid username or password.</p><a href="/login">Try again</a></section>')
         session_obj=create_session(db,user.id)
     response=RedirectResponse("/",status_code=303)
-    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_session",getattr(session_obj,"_raw_token",session_obj.id),max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
     response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
     return response
 
