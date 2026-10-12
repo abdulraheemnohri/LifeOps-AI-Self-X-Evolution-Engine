@@ -28,6 +28,7 @@ The policy engine returns `ALLOW`, `ASK`, or `BLOCK`. Approval records are an au
 - [x] Service validation and audit events
 - [x] Project, memory, approval and agent-run persistence services
 - [x] Self-X goal/evaluation/proposal records with review state
+- [x] Browser UI for goal creation, proposal submission, and review decisions
 - [x] SQLite online backup, manifest hash verification, integrity check and non-overwriting restore
 - [x] Deterministic policy decision unit tests
 - [ ] Authentication, sessions, CSRF, and authorization
@@ -37,3 +38,10 @@ The policy engine returns `ALLOW`, `ASK`, or `BLOCK`. Approval records are an au
 - [ ] Durable worker queue, step logs, retry and recovery
 - [ ] Skills lifecycle and isolated repair/evaluation workflows
 - [ ] Browser-level tests and Windows/Linux CI verification
+
+
+## Repository hygiene
+
+- Configuration files contain non-secret defaults only; credentials must be injected from the environment or OS secret store.
+- Keep generated databases, virtual environments, test caches, private workspace files, and backups out of version control.
+- Do not label CI as passing until a real workflow result for the relevant commit has been inspected.
