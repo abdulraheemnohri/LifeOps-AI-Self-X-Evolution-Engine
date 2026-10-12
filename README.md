@@ -1,24 +1,20 @@
 # LifeOps AI + Self-X Evolution Engine
 
-A local-first personal productivity platform with a browser UI and a staged path toward controlled AI automation. This repository is being implemented in phases; this foundation does not claim to provide autonomous model execution or production authentication.
+A local-first personal productivity platform with a browser UI and a staged path toward controlled AI automation. Current capabilities include task and note management, projects, searchable memory, audit events, approval records, and a deterministic action policy.
 
-## Requirements
+## Install
 
-- Python 3.12 or newer
-- Windows 10/11 or Linux
-- Internet for initial package installation; core task/note features need no network after dependencies are installed
-
-## Install (Windows PowerShell)
+Python 3.12 or newer. Windows PowerShell:
 
 ```powershell
 py -3.12 -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
 python -m lifeops.app
 ```
 
-## Install (Linux)
+Linux:
 
 ```bash
 python3.12 -m venv .venv
@@ -28,16 +24,14 @@ pip install -e '.[dev]'
 python -m lifeops.app
 ```
 
-Open http://127.0.0.1:5001. The database is created automatically at `data/lifeops.db`. Set `LIFEOPS_DATA_DIR` or `LIFEOPS_DATABASE_URL` to change storage, or `LIFEOPS_PORT` to change the port. Health status is at `/health`. See [installation](docs/installation.md) and [architecture/acceptance checklist](docs/architecture.md).
+Open http://127.0.0.1:5001. SQLite is created at `data/lifeops.db`. Run `pytest -q` for service tests and open `/health` for status.
 
-## Current scope
+## Honest feature status
 
-Implemented in the foundation: SQLite task and note persistence, task completion, audit events, responsive browser UI, basic input validation, and a health endpoint. AI inference, authentication, migrations, persistent background jobs, approvals, integrations, and full Self-X repair/evaluation workflows remain planned work. Do not expose this initial build to an untrusted network.
+The model runtime and tool executor are not configured. Agent requests are persisted with a `needs_input` status rather than pretending to execute. The policy module is deterministic, but approvals do not themselves run actions. Authentication, CSRF protection, migrations, real inference, background workers, and several advanced modules remain incomplete. Do not expose this development build to untrusted networks.
 
-## Security note
-
-The application binds to loopback by default. Remote binding requires `LIFEOPS_ALLOW_REMOTE=true`, but this alone does not add authentication and must not be treated as a production deployment setting.
+See [installation](docs/installation.md) and [architecture](docs/architecture.md). Optional donations can be linked in a later Support page; no payment details are collected by this app.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT.
