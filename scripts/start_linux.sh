@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-set -e
-
-echo "=== Starting LifeOps AI Web UI ==="
-if [ -d "venv" ]; then
-    source venv/bin/activate
-fi
-
-export PYTHONPATH=.
-uvicorn lifeops.main:app --host 127.0.0.1 --port 8000 --reload
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+if [[ ! -x .venv/bin/python ]]; then echo "Virtual environment not found. Run ./scripts/install_linux.sh first." >&2; exit 1; fi
+exec .venv/bin/python -m lifeops.app
