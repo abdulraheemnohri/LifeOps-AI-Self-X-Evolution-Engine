@@ -23,10 +23,10 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Create all tables for a new database."""
     bind = op.get_bind()
-    Base.metadata.create_all(bind=bind, checkfirst=True)
+    Base.metadata.create_all(\n        bind=bind,\n        tables=[Base.metadata.tables[name] for name in INITIAL_TABLES],\n        checkfirst=True,\n    )
 
 
 def downgrade() -> None:
     """Drop the initial schema in dependency-safe order."""
     bind = op.get_bind()
-    Base.metadata.drop_all(bind=bind, checkfirst=True)
+    Base.metadata.drop_all(\n        bind=bind,\n        tables=[Base.metadata.tables[name] for name in reversed(INITIAL_TABLES)],\n        checkfirst=True,\n    )
