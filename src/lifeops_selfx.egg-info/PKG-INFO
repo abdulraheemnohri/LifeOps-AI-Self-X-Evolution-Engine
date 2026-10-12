@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: lifeops-selfx
+Version: 0.1.0
+Summary: LifeOps AI + Self-X Evolution Engine
+Author: LifeOps Team
+License: MIT
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: python-fasthtml>=0.14.0
+Requires-Dist: pydantic>=2.0
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: alembic>=1.13.0
+Requires-Dist: uvicorn>=0.30.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Dynamic: license-file
+
+# lifeops-selfx
+This specification defines a complete, self-hosted personal AI platform combining LifeOps productivity automation with the Self-X self-evolution engine, inspired by the general capabilities of Hermes Agent.
