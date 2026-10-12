@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, Integer, String, Text, Boolean, ForeignKey, create_engine, Index
+from sqlalchemy import DateTime, Integer, String, Text, Boolean, ForeignKey, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 def utcnow() -> datetime:
@@ -117,9 +117,22 @@ def get_session_factory():
     return _SessionLocal
 
 def init_db():
+    """Create tables and apply additive, idempotent SQLite schema upgrades."""
     global _engine
     if _engine is None: configure_database()
     Base.metadata.create_all(bind=_engine)
+    # create_all does not alter existing tables.
+    if _engine.dialect.name == "sqlite":
+        with _engine.begin() as conn:
+            columns = {item["name"] for item in inspect(_engine).get_columns("tasks")}
+            if "project_id" not in columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"))
+            if "due_at" not in columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at DATETIME"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_due_at ON tasks(due_at)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"))
+            conn.execute(text("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, :now)"), {"now": utcnow().isoformat()})
     return _engine
 
 configure_database()
