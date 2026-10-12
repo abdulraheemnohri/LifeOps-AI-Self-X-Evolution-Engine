@@ -13,7 +13,10 @@ from .services import create_task, list_tasks, complete_task, create_note, list_
 
 @asynccontextmanager
 async def lifespan(app):
-    init_db(); yield
+    engine = init_db()
+    from .storage.models import Base as StorageBase
+    StorageBase.metadata.create_all(bind=engine)
+    yield
 
 def page(title: str, body: str) -> HTMLResponse:
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>{escape(title)} · LifeOps</title><link rel="stylesheet" href="/static/app.css"></head><body><aside class="sidebar"><a class="brand" href="/">◈ LifeOps <span>SELF-X</span></a><nav><a href="/">Overview</a><a href="/tasks">Tasks</a><a href="/notes">Notes & Knowledge</a><a href="/projects">Projects</a><a href="/memory">Memory Explorer</a><a href="/approvals">Approvals</a><a href="/selfx">Self-X Diagnostics</a><a href="/settings">Settings</a></nav><div class="local-tag">● Local-first workspace</div></aside><main><header><div><p class="eyebrow">PERSONAL OPERATING SYSTEM</p><h1>{escape(title)}</h1></div><span class="pill">v{__version__}</span></header>{body}<footer>LifeOps AI + Self-X · Your data stays on this machine by default.</footer></main></body></html>'''
