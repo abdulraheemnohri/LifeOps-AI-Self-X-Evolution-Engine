@@ -38,7 +38,7 @@ pip install -e '.[dev]'
 LIFEOPS_HOST=127.0.0.1 LIFEOPS_PORT=5001 python -m lifeops.app
 ```
 
-Open http://127.0.0.1:5001. SQLite is created at `data/lifeops.db`. Run `pytest -q` for tests and open `/health` for a basic health report.
+Open http://127.0.0.1:5001. SQLite is created at `data/lifeops.db`. Run `pytest -q` for tests and open `/health` for a basic health report.\n\nFor a fresh database, apply the versioned schema with `alembic upgrade head` (PowerShell and Linux). To inspect the current schema revision, run `alembic current`. Back up the SQLite database before applying migrations to an existing workspace.
 
 ## Honest capability and security status
 
