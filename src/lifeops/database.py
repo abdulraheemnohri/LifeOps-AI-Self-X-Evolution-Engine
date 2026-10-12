@@ -162,6 +162,8 @@ def init_db():
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"))
             if "due_at" not in columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at DATETIME"))
+            if "completed_at" not in columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN completed_at DATETIME"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_due_at ON tasks(due_at)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"))
