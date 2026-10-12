@@ -225,7 +225,8 @@ def validate_bind_host(host: str) -> str:
 
 
 # Authentication endpoints. Initial setup is available only while no user exists.
-import secrets as _secrets\nimport hmac
+import secrets as _secrets
+import hmac
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -256,7 +257,7 @@ async def setup_submit(request):
         db.add(user); db.commit(); db.refresh(user)
         session_obj=create_session(db,user.id)
     response=RedirectResponse("/",status_code=303)
-    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_session",getattr(session_obj,"_raw_token",session_obj.id),max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
     response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
     return response
 
@@ -275,7 +276,7 @@ async def login_submit(request):
             return page("Sign in",'<section class="panel"><p class="error">Invalid username or password.</p><a href="/login">Try again</a></section>')
         session_obj=create_session(db,user.id)
     response=RedirectResponse("/",status_code=303)
-    response.set_cookie("lifeops_session",session_obj.id,max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
+    response.set_cookie("lifeops_session",getattr(session_obj,"_raw_token",session_obj.id),max_age=43200,httponly=True,secure=request.url.scheme=="https",samesite="lax",path="/")
     response.set_cookie("lifeops_csrf",_secrets.token_urlsafe(32),max_age=43200,httponly=False,secure=request.url.scheme=="https",samesite="lax",path="/")
     return response
 
