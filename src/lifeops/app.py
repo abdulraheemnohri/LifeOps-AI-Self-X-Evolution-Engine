@@ -133,6 +133,36 @@ async def api_tasks(request):
         return JSONResponse({"id":t.id,"title":t.title,"status":t.status},status_code=201)
     except ValidationError as exc: return JSONResponse({"error":str(exc)},status_code=422)
 
+
+async def api_approvals(request):
+    if request.method == "GET":
+        with db_session() as db:
+            items=list_approvals(db, str(request.query_params.get("status","pending")))
+        return JSONResponse({"items":[{"id":a.id,"action":a.action,"summary":a.summary,"risk":a.risk,"status":a.status} for a in items]})
+    data=await request.json()
+    try:
+        with db_session() as db: a=create_approval(db,str(data.get("action","")),str(data.get("summary","")),str(data.get("risk","high")))
+        return JSONResponse({"id":a.id,"status":a.status,"action":a.action},status_code=201)
+    except ValidationError as exc: return JSONResponse({"error":str(exc)},status_code=422)
+
+async def api_approval_decision(request):
+    data=await request.json()
+    try:
+        with db_session() as db:
+            item=decide_approval(db,int(request.path_params["approval_id"]),approve=bool(data.get("approve")),actor=str(data.get("actor","local-user")),reason=str(data.get("reason","")))
+        return JSONResponse({"id":item.id,"status":item.status,"decided_at":item.decided_at.isoformat() if item.decided_at else None})
+    except (ValueError,LookupError,ValidationError) as exc: return JSONResponse({"error":str(exc)},status_code=409)
+
+async def api_memories(request):
+    if request.method == "GET":
+        with db_session() as db: rows=search_memories(db,str(request.query_params.get("q","")))
+        return JSONResponse({"items":[{"id":m.id,"category":m.category,"content":m.content,"source":m.source,"confidence":m.confidence,"stale":m.stale} for m in rows]})
+    data=await request.json()
+    try:
+        with db_session() as db: m=create_memory(db,str(data.get("content","")),str(data.get("category","general")),str(data.get("source","api")),float(data.get("confidence",1.0)))
+        return JSONResponse({"id":m.id,"category":m.category},status_code=201)
+    except (ValidationError,TypeError,ValueError) as exc: return JSONResponse({"error":str(exc)},status_code=422)
+
 async def api_agent_runs(request):
     data=await request.json()
     try:
@@ -153,7 +183,7 @@ async def stylesheet(request):
     if not css.exists(): return PlainTextResponse("Stylesheet missing",status_code=404)
     return PlainTextResponse(css.read_text(encoding="utf-8"),media_type="text/css")
 
-routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
+routes=[Route("/",home),Route("/tasks",tasks_page,methods=["GET"]),Route("/tasks",create_task_route,methods=["POST"]),Route("/tasks/{task_id:int}/complete",complete_task_route,methods=["POST"]),Route("/notes",notes_page,methods=["GET"]),Route("/notes",create_note_route,methods=["POST"]),Route("/projects",projects_page),Route("/projects",create_project_route,methods=["POST"]),Route("/memory",memory_page),Route("/memory",create_memory_route,methods=["POST"]),Route("/memory/{memory_id:int}/delete",delete_memory_route,methods=["POST"]),Route("/approvals",approvals_page),Route("/approvals/{approval_id:int}/decision",approval_decision_route,methods=["POST"]),Route("/api/v1/tasks",api_tasks,methods=["GET","POST"]),Route("/api/v1/memories",api_memories,methods=["GET","POST"]),Route("/api/v1/approvals",api_approvals,methods=["GET","POST"]),Route("/api/v1/approvals/{approval_id:int}/decision",api_approval_decision,methods=["POST"]),Route("/api/v1/agent-runs",api_agent_runs,methods=["POST"]),Route("/selfx",selfx_page),Route("/settings",settings_page),Route("/health",health),Route("/static/app.css",stylesheet)]
 app=FastHTML(routes=routes,lifespan=lifespan)
 if __name__=="__main__":
     host=os.getenv("LIFEOPS_HOST","127.0.0.1")
