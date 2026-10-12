@@ -225,7 +225,7 @@ def validate_bind_host(host: str) -> str:
 
 
 # Authentication endpoints. Initial setup is available only while no user exists.
-import secrets as _secrets
+import secrets as _secrets\nimport hmac
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -310,7 +310,15 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
                     supplied=str(form.get("_csrf",""))
                 except Exception:
                     supplied=""
-            if not cookie_token or not supplied or not hmac.compare_digest(cookie_token,supplied):
+            # Same-origin validation protects ordinary HTML forms; token matching
+            # is additionally required when a browser client supplies the token.
+            origin=request.headers.get("origin","")
+            expected_origin=str(request.base_url).rstrip("/")
+            if supplied:
+                valid=bool(cookie_token and hmac.compare_digest(cookie_token,supplied))
+            else:
+                valid=bool(origin and hmac.compare_digest(origin.rstrip("/"),expected_origin))
+            if not valid:
                 return JSONResponse({"error":"csrf_validation_failed"},status_code=403)
         return await call_next(request)
 
