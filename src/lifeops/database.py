@@ -84,6 +84,39 @@ class AgentRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
+
+class SelfGoal(Base):
+    __tablename__ = "selfx_goals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    baseline: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    target: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+class Evaluation(Base):
+    __tablename__ = "evaluations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    suite_version: Mapped[str] = mapped_column(String(80), default="1", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="recorded", nullable=False)
+    score: Mapped[float | None] = mapped_column(nullable=True)
+    details: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+class ImprovementProposal(Base):
+    __tablename__ = "improvement_proposals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    problem: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    expected_benefit: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    risk: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
+    rollback_plan: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="proposed", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
