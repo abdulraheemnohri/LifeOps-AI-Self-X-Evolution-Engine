@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from html import escape
-from fasthtml.common import FastHTML, serve
+from fasthtml.common import FastHTML
+import uvicorn
 from starlette.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from . import __version__
@@ -92,4 +93,4 @@ app=FastHTML(routes=routes,lifespan=lifespan)
 if __name__=="__main__":
     host=os.getenv("LIFEOPS_HOST","127.0.0.1")
     if host not in {"127.0.0.1","localhost","::1"} and os.getenv("LIFEOPS_ALLOW_REMOTE","").lower()!="true": raise SystemExit("Remote binding blocked. Set LIFEOPS_ALLOW_REMOTE=true only after configuring authentication and network protections.")
-    serve(app,host=host,port=int(os.getenv("LIFEOPS_PORT","5001")))
+    uvicorn.run(app,host=host,port=int(os.getenv("LIFEOPS_PORT","5001")) )
