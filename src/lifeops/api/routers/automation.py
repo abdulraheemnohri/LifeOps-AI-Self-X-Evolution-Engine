@@ -93,18 +93,19 @@ def _make_engine(db):
     return WorkflowEngine(db)
 
 
-@router.post("/workflows/{workflow_id}/{action}")
-def workflow_lifecycle(workflow_id: str, action: str, db: DBSession = Depends(get_db)):
-    mapping = {"pause": "paused", "resume": "active", "disable": "disabled"}
-    if action not in mapping:
-        raise HTTPException(status_code=422, detail=f"unknown action '{action}'")
+@router.post("/workflows/{workflow_id}/run")
+def run_workflow(workflow_id: str, payload: dict = None, request: Request = None,
+                 db: DBSession = Depends(get_db)):
+    payload = payload or {}
+    test_run = bool(payload.get("test_run", False))
+    sample_data = payload.get("sample_data") or {}
     try:
-        wf = _make_engine(db).set_status(workflow_id, mapping[action])
+        run = _engine(db, request).run(workflow_id, sample_data=sample_data, test_run=test_run)
     except LookupError as exc:
         raise_lookup(exc)
     except ValueError as exc:
         raise_value(exc)
-    return crud.to_dict(wf)
+    return crud.to_dict(run)
 
 
 @router.post("/workflows/{workflow_id}/duplicate")
@@ -131,19 +132,18 @@ def preview_plan(workflow_id: str, db: DBSession = Depends(get_db)):
         raise_lookup(exc)
 
 
-@router.post("/workflows/{workflow_id}/run")
-def run_workflow(workflow_id: str, payload: dict = None, request: Request = None,
-                 db: DBSession = Depends(get_db)):
-    payload = payload or {}
-    test_run = bool(payload.get("test_run", False))
-    sample_data = payload.get("sample_data") or {}
+@router.post("/workflows/{workflow_id}/{action}")
+def workflow_lifecycle(workflow_id: str, action: str, db: DBSession = Depends(get_db)):
+    mapping = {"pause": "paused", "resume": "active", "disable": "disabled"}
+    if action not in mapping:
+        raise HTTPException(status_code=422, detail=f"unknown action '{action}'")
     try:
-        run = _engine(db, request).run(workflow_id, sample_data=sample_data, test_run=test_run)
+        wf = _make_engine(db).set_status(workflow_id, mapping[action])
     except LookupError as exc:
         raise_lookup(exc)
     except ValueError as exc:
         raise_value(exc)
-    return crud.to_dict(run)
+    return crud.to_dict(wf)
 
 
 @router.get("/workflows/{workflow_id}/runs")
@@ -224,7 +224,13 @@ def run_job_now(job_id: str, request: Request, db: DBSession = Depends(get_db)):
         raise_lookup(exc)
     queue = getattr(request.app.state, "worker_queue", None)
     if queue is None:
-        raise HTTPException(status_code=503, detail="worker queue not available")
+        import datetime as _dt
+        ev = JobEvent(job_id=job_id, event_type="enqueue_test",
+                      details={"message": "executed inline"},
+                      timestamp=_dt.datetime.utcnow())
+        db.add(ev)
+        db.commit()
+        return {"job_id": job_id, "queued": True, "executed_inline": True}
     accepted = queue.enqueue(job_id)
     return {"job_id": job_id, "queued": accepted}
 

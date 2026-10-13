@@ -84,8 +84,9 @@ def test_litert_falls_back_without_binary():
 
 
 def test_litert_available_when_binary_present(tmp_path):
-    # /bin/sh always exists on POSIX; shutil.which resolves absolute path too
-    adapter = LiteRTLMAdapter(binary_path="/bin/sh")
+    import sys, shutil
+    binary = "cmd.exe" if sys.platform == "win32" else "/bin/sh"
+    adapter = LiteRTLMAdapter(binary_path=binary)
     assert adapter.is_available() is True
 
 

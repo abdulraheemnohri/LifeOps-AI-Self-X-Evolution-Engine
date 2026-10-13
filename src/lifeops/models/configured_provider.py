@@ -45,6 +45,9 @@ def is_safe_endpoint_override(endpoint: str) -> bool:
     """Allow explicit HTTP loopback endpoints only (SSRF protection)."""
     from urllib.parse import urlsplit
 
+    if any(c in endpoint for c in ("\r", "\n", "\t", " ")):
+        return False
+
     try:
         parsed = urlsplit(endpoint)
         port = parsed.port
