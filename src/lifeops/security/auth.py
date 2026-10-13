@@ -18,9 +18,18 @@ MAX_PBKDF2_ROUNDS = 2_000_000
 MAX_PASSWORD_LENGTH = 1024
 SESSION_TTL_SECONDS = 12 * 60 * 60
 
+import sqlite3
+
 @dataclass(frozen=True)
 class PasswordHash:
     encoded: str
+
+    def __str__(self) -> str:
+        return self.encoded
+
+    def __conform__(self, protocol):
+        if protocol is sqlite3.PrepareProtocol:
+            return self.encoded
 
 def hash_password(password: str, salt: Optional[str] = None) -> PasswordHash:
     """Hash a password with PBKDF2-HMAC-SHA256 and a random per-password salt."""

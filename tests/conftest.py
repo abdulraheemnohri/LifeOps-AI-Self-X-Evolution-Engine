@@ -22,8 +22,28 @@ def session_factory(tmp_path):
 
 
 @pytest.fixture()
-def client(session_factory):
+def unauthenticated_client(session_factory):
     with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def client(session_factory):
+    db = session_factory()
+    try:
+        from lifeops.storage.models import User
+        from lifeops.security.auth import hash_password, create_session
+        user = User(username="admin", password_hash=hash_password("adminpassword123").encoded, role="admin")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        sess = create_session(db, user.id)
+        raw_token = getattr(sess, "_raw_token", sess.id)
+    finally:
+        db.close()
+
+    with TestClient(app) as c:
+        c.cookies.set("lifeops_session", raw_token)
         yield c
 
 

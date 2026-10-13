@@ -29,9 +29,10 @@ def get_settings(db: DBSession = Depends(get_db)):
 @router.get("/settings/{section}")
 def get_settings_section(section: str, db: DBSession = Depends(get_db)):
     all_settings = SettingsService(db).get_all()
-    if section not in all_settings:
+    target_section = "model" if section in ("models", "model_settings") else section
+    if target_section not in all_settings:
         raise_lookup(LookupError(f"Unknown settings section '{section}'"))
-    return {section: all_settings[section]}
+    return {section: all_settings[target_section]}
 
 
 @router.put("/settings/{section}")

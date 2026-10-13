@@ -142,6 +142,7 @@ def configure_database(url: str | None = None):
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
+    init_db()
     return _engine
 
 def get_session_factory():
@@ -162,8 +163,41 @@ def init_db():
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"))
             if "due_at" not in columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at DATETIME"))
+            if "completed_at" not in columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN completed_at DATETIME"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_due_at ON tasks(due_at)"))
+
+            audit_cols = {item["name"] for item in inspect(_engine).get_columns("audit_events")}
+            if "event_type" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_events ADD COLUMN event_type VARCHAR(80)"))
+            if "created_at" not in audit_cols:
+                conn.execute(text("ALTER TABLE audit_events ADD COLUMN created_at DATETIME"))
+
+            goal_cols = {item["name"] for item in inspect(_engine).get_columns("selfx_goals")}
+            if "title" not in goal_cols:
+                conn.execute(text("ALTER TABLE selfx_goals ADD COLUMN title VARCHAR(240)"))
+
+            eval_cols = {item["name"] for item in inspect(_engine).get_columns("evaluations")}
+            if "name" not in eval_cols:
+                conn.execute(text("ALTER TABLE evaluations ADD COLUMN name VARCHAR(240)"))
+            if "suite_version" not in eval_cols:
+                conn.execute(text("ALTER TABLE evaluations ADD COLUMN suite_version VARCHAR(80)"))
+            if "status" not in eval_cols:
+                conn.execute(text("ALTER TABLE evaluations ADD COLUMN status VARCHAR(20) DEFAULT 'recorded'"))
+            if "details" not in eval_cols:
+                conn.execute(text("ALTER TABLE evaluations ADD COLUMN details TEXT"))
+
+            prop_cols = {item["name"] for item in inspect(_engine).get_columns("improvement_proposals")}
+            if "title" not in prop_cols:
+                conn.execute(text("ALTER TABLE improvement_proposals ADD COLUMN title VARCHAR(240)"))
+            if "evidence" not in prop_cols:
+                conn.execute(text("ALTER TABLE improvement_proposals ADD COLUMN evidence TEXT"))
+            if "risk" not in prop_cols:
+                conn.execute(text("ALTER TABLE improvement_proposals ADD COLUMN risk VARCHAR(20)"))
+            if "rollback_plan" not in prop_cols:
+                conn.execute(text("ALTER TABLE improvement_proposals ADD COLUMN rollback_plan TEXT"))
+
             conn.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"))
             conn.execute(text("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, :now)"), {"now": utcnow().isoformat()})
     return _engine

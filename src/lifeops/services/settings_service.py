@@ -96,43 +96,52 @@ class SettingsService:
         return self.get_all().get(section, {})
 
     def validate(self, section: str, updates: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
-        if section not in DEFAULT_SETTINGS:
+        real_section = "model" if section in ("models", "model_settings") else section
+        if real_section not in DEFAULT_SETTINGS:
             return False, f"Unknown settings section '{section}'"
+        allowed_keys = set(DEFAULT_SETTINGS[real_section].keys())
+        if real_section == "model":
+            allowed_keys.update({"temperature", "top_p", "max_tokens", "seed"})
         for key in updates:
-            if key not in DEFAULT_SETTINGS[section]:
+            if key not in allowed_keys:
                 return False, f"Unknown setting '{section}/{key}'"
-        if section == "security" and "network_binding" in updates:
+        if real_section == "security" and "network_binding" in updates:
             if updates["network_binding"] not in ("127.0.0.1", "localhost", "::1"):
                 return False, "network_binding change requires explicit confirmation flag confirm_exposure=true"
-        if section == "model" and "context_length" in updates:
+        if real_section == "model" and "context_length" in updates:
             v = updates["context_length"]
             if not isinstance(v, int) or not (256 <= v <= 1_000_000):
                 return False, "context_length must be an integer between 256 and 1000000"
-        if section == "model" and "runtime" in updates:
+        if real_section == "model" and "runtime" in updates:
             if updates["runtime"] not in ("mock", "litert", "ollama"):
                 return False, "model.runtime must be one of: mock, litert, ollama"
+        if real_section == "model" and "temperature" in updates:
+            v = updates["temperature"]
+            if not isinstance(v, (int, float)) or not (0.0 <= float(v) <= 2.0):
+                return False, "temperature must be between 0.0 and 2.0"
         return True, None
 
     def update(self, section: str, updates: Dict[str, Any], actor: str = "user",
                confirm_exposure: bool = False) -> Dict[str, Any]:
-        ok, err = self.validate(section, updates)
+        real_section = "model" if section in ("models", "model_settings") else section
+        ok, err = self.validate(real_section, updates)
         if not ok:
             raise ValueError(err)
-        if section == "security" and updates.get("network_binding") not in (None, "127.0.0.1", "localhost", "::1") \
+        if real_section == "security" and updates.get("network_binding") not in (None, "127.0.0.1", "localhost", "::1") \
                 and not confirm_exposure:
             raise ValueError("Changing network exposure requires explicit confirmation.")
-        current = self.get_section(section)
+        current = self.get_section(real_section)
         merged = {**current, **updates}
-        row = self.db.get(Setting, section)
+        row = self.db.get(Setting, real_section)
         if row is None:
-            row = Setting(key=section, value={"value": merged})
+            row = Setting(key=real_section, value={"value": merged})
             self.db.add(row)
         else:
             row.value = {"value": merged}
         self.db.commit()
-        if section in SECURITY_RELEVANT_SECTIONS:
-            log_audit_event(self.db, actor=actor, action=f"settings.update.{section}",
-                            target=section, outcome="success",
+        if real_section in SECURITY_RELEVANT_SECTIONS:
+            log_audit_event(self.db, actor=actor, action=f"settings.update.{real_section}",
+                            target=real_section, outcome="success",
                             details={"keys": sorted(updates.keys())})
         return merged
 

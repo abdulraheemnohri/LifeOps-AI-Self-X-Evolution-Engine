@@ -16,17 +16,18 @@ def test_auth_password_and_session(tmp_path):
     assert verify_password(pwd, hashed)
     assert not verify_password("wrong", hashed)
 
-    user = User(username="alice", password_hash=hashed)
+    user = User(username="alice", password_hash=hashed.encoded)
     db.add(user)
     db.commit()
 
     sess = create_session(db, user.id)
-    val_user = validate_session(db, sess.id)
+    raw_token = getattr(sess, "_raw_token", sess.id)
+    val_user = validate_session(db, raw_token)
     assert val_user is not None
     assert val_user.username == "alice"
 
-    revoke_session(db, sess.id)
-    assert validate_session(db, sess.id) is None
+    revoke_session(db, raw_token)
+    assert validate_session(db, raw_token) is None
     db.close()
 
 def test_policy_and_approval_gate(tmp_path):

@@ -50,7 +50,7 @@ def bootstrap_admin(payload: dict, db: DBSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail="username must be at least 3 characters")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="password must be at least 8 characters")
-    user = User(username=username, password_hash=hash_password(password), role="admin")
+    user = User(username=username, password_hash=hash_password(password).encoded, role="admin")
     db.add(user)
     db.commit()
     log_audit_event(db, actor="system", action="auth.bootstrap", target=username, outcome="success")
@@ -67,7 +67,7 @@ def login(payload: dict, request: Request, response: Response, db: DBSession = D
                         target=username, outcome="failure")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     session_obj = create_session(db, user.id)
-    response.set_cookie(key="lifeops_session", value=session_obj.id, httponly=True, samesite="lax")
+    response.set_cookie(key="lifeops_session", value=getattr(session_obj, "_raw_token", session_obj.id), httponly=True, samesite="lax")
     log_audit_event(db, actor=user.username, action="auth.login", target="session", outcome="success")
     return {"status": "ok", "username": user.username, "role": user.role}
 

@@ -122,7 +122,7 @@ class BackupManager:
                     con.close()
             rec.verified = ok
             self.db.commit()
-            return {"verified": ok, "reason": reason, "manifest": manifest}
+            return {"verified": ok, "ok": ok, "valid": ok, "reason": reason, "manifest": manifest}
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
