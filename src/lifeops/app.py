@@ -11,6 +11,7 @@ from . import __version__
 from .database import init_db, get_session_factory, Task, AuditEvent
 from .services import create_task, list_tasks, complete_task, create_note, list_notes, create_project, list_projects, create_memory, search_memories, create_approval, list_approvals, decide_approval, create_agent_run, create_self_goal, create_improvement_proposal, decide_improvement_proposal, ValidationError
 
+@asynccontextmanager
 async def lifespan(app):
     engine = init_db()
     from .storage.models import Base as StorageBase

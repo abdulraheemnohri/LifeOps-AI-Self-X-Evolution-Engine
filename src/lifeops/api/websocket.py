@@ -24,7 +24,7 @@ class ConnectionManager:
         async with self._lock:
             self.active_connections.add(websocket)
 
-    def disconnect(self, websocket):
+    async def disconnect(self, websocket):
         """Remove a WebSocket connection."""
         async with self._lock:
             self.active_connections.discard(websocket)
@@ -51,7 +51,7 @@ class EventStreamManager:
         async with self._lock:
             self.active_connections.add(sse_instance)
 
-    def disconnect(self, sse_instance):
+    async def disconnect(self, sse_instance):
         """Remove an SSE connection."""
         async with self._lock:
             self.active_connections.discard(sse_instance)
@@ -89,7 +89,7 @@ class WebSocketEventsEndpoint(WebSocketEndpoint):
 
     async def on_disconnect(self, websocket, close_code):
         """Handle disconnection."""
-        websocket_manager.disconnect(websocket)
+        await websocket_manager.disconnect(websocket)
 
     async def on_receive(self, websocket, data):
         """Handle incoming messages (not used for broadcast-only)."""
@@ -120,9 +120,9 @@ async def sse_events_endpoint(request: Request):
             while True:
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
-            sse_manager.disconnect(sse_instance)
+            await sse_manager.disconnect(sse_instance)
         except Exception:
-            sse_manager.disconnect(sse_instance)
+            await sse_manager.disconnect(sse_instance)
     
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
