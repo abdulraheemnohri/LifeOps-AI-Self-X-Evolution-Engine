@@ -28,16 +28,24 @@ def create_backup(source: Path, destination: Path) -> dict:
     if source == destination: raise ValueError("Backup destination must differ from the live database.")
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".partial")
-    if temporary.exists(): temporary.unlink()
+    if temporary.exists():
+        try: temporary.unlink()
+        except OSError: pass
     try:
-        with sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True) as src:
-            with sqlite3.connect(temporary) as dst:
-                src.backup(dst)
-                result = dst.execute("PRAGMA integrity_check").fetchone()[0]
-                if result != "ok": raise RuntimeError(f"Backup integrity check failed: {result}")
+        src = sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
+        dst = sqlite3.connect(temporary)
+        try:
+            src.backup(dst)
+            result = dst.execute("PRAGMA integrity_check").fetchone()[0]
+            if result != "ok": raise RuntimeError(f"Backup integrity check failed: {result}")
+        finally:
+            src.close()
+            dst.close()
         os.replace(temporary, destination)
     finally:
-        if temporary.exists(): temporary.unlink()
+        if temporary.exists():
+            try: temporary.unlink()
+            except OSError: pass
     manifest = {
         "format_version": 1,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -69,10 +77,16 @@ def restore_backup(backup: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".restore")
     try:
-        with sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True) as src:
-            with sqlite3.connect(temporary) as dst:
-                src.backup(dst)
-                if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok": raise RuntimeError("Restored database failed integrity check.")
+        src = sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True)
+        dst = sqlite3.connect(temporary)
+        try:
+            src.backup(dst)
+            if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok": raise RuntimeError("Restored database failed integrity check.")
+        finally:
+            src.close()
+            dst.close()
         os.replace(temporary, destination)
     finally:
-        if temporary.exists(): temporary.unlink()
+        if temporary.exists():
+            try: temporary.unlink()
+            except OSError: pass

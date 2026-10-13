@@ -38,7 +38,7 @@ class Task(Base):
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     priority: Mapped[str] = mapped_column(String(12), default="medium", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False, index=True)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -161,12 +161,12 @@ def init_db():
             columns = {item["name"] for item in inspect(_engine).get_columns("tasks")}
             if "project_id" not in columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"))
-            if "due_at" not in columns:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN due_at DATETIME"))
+            if "due_date" not in columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN due_date DATETIME"))
             if "completed_at" not in columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN completed_at DATETIME"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_project_id ON tasks(project_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_due_at ON tasks(due_at)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_due_date ON tasks(due_date)"))
 
             audit_cols = {item["name"] for item in inspect(_engine).get_columns("audit_events")}
             if "event_type" not in audit_cols:
